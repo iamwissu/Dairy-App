@@ -1,0 +1,49 @@
+// ============================================================================
+// FIRESTORE SECURITY RULES
+// ----------------------------------------------------------------------------
+// Copy this ENTIRE file into: Firebase Console → Firestore Database → Rules
+// (replacing whatever is there), then click "Publish".
+//
+// What this enforces:
+//   - You must be signed in to read or write anything.
+//   - You can only read, update, or delete an entry whose userId field
+//     matches your own auth uid — never another friend's entries.
+//   - You can only create an entry if you stamp it with YOUR OWN uid as
+//     userId (so nobody can write an entry into someone else's diary).
+//   - The "text" field is required and capped in size as a light guard
+//     against abuse; adjust maxTextLength if you want longer entries.
+// ============================================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /entries/{entryId} {
+
+      // Read (get single doc / list query), update, delete:
+      // only the owner of an EXISTING entry may do these.
+      allow read, update, delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+
+      // Create: only allowed if the NEW document's userId is the
+      // creator's own uid, and the payload is well-formed.
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 20000
+        && request.resource.data.createdAt == request.time; // must use serverTimestamp()
+
+      function isSignedIn() {
+        return request.auth != null;
+      }
+    }
+
+    // Deny everything else by default (no other collections are used by
+    // this app, so nothing else should be readable or writable).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

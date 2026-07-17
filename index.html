@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Kioku — a private diary</title>
+<meta name="description" content="Kioku: a private, cloud-synced diary for a small circle of friends." />
+
+<!-- Tailwind (CDN build — fine for a small static app; for production at scale, compile it) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          ink:        '#141b17', // page background — deep forest-charcoal
+          ink2:       '#1c2622', // card / surface
+          ink3:       '#26322c', // inputs, elevated surface
+          hairline:   '#33403a', // borders, dividers
+          parchment:  '#eee7d6', // primary text — warm paper
+          dim:        '#a29a8c', // secondary text
+          moss:       '#7c9473', // primary accent
+          'moss-deep':'#5c7355', // accent hover
+          amber:      '#d4a05f', // voice / listening accent
+          rose:       '#c17767', // danger / delete
+        },
+        fontFamily: {
+          display: ['"Fraunces"', 'serif'],
+          serif:   ['"Literata"', 'serif'],
+          sans:    ['"Inter"', 'sans-serif'],
+          hand:    ['"Caveat"', 'cursive'], // fun, handwritten — used for the splash wordmark only
+        },
+        keyframes: {
+          breathe: {
+            '0%, 100%': { transform: 'scale(1)', opacity: '0.55' },
+            '50%':      { transform: 'scale(1.35)', opacity: '0' },
+          },
+          'fade-up': {
+            '0%':   { opacity: '0', transform: 'translateY(6px)' },
+            '100%': { opacity: '1', transform: 'translateY(0)' },
+          },
+          'splash-out': {
+            '0%':   { opacity: '1' },
+            '100%': { opacity: '0', visibility: 'hidden' },
+          },
+          'write-in': {
+            '0%':   { opacity: '0', transform: 'translateY(10px) rotate(-2deg)' },
+            '100%': { opacity: '1', transform: 'translateY(0) rotate(-2deg)' },
+          },
+        },
+        animation: {
+          breathe: 'breathe 2.2s ease-out infinite',
+          'fade-up': 'fade-up 0.4s ease-out both',
+          'write-in': 'write-in 0.7s cubic-bezier(0.2,0.8,0.2,1) both',
+        },
+      },
+    },
+  };
+</script>
+
+<!-- Type: Fraunces (display, for dates & headings), Literata (serif body, for diary text), Inter (UI chrome) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Literata:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  html, body { background: #141b17; }
+  ::selection { background: #7c9473; color: #141b17; }
+  /* thin, warm scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #33403a; border-radius: 4px; }
+
+  /* deckled / torn top edge for entry cards — the journal-page signature */
+  .torn-edge {
+    -webkit-mask-image: linear-gradient(#000 0 0);
+    mask-image: linear-gradient(#000 0 0);
+  }
+  .torn-edge::before {
+    content: '';
+    display: block;
+    height: 6px;
+    width: 100%;
+    background-image: linear-gradient(135deg, #141b17 50%, transparent 50%),
+                       linear-gradient(225deg, #141b17 50%, transparent 50%);
+    background-size: 10px 12px;
+    background-position: top left;
+    background-repeat: repeat-x;
+  }
+
+  textarea:focus, input:focus { outline: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-breathe, .animate-fade-up { animation: none !important; }
+  }
+</style>
+</head>
+
+<body class="bg-ink text-parchment font-sans min-h-screen antialiased">
+
+  <!-- App shell — capped width so it reads well on desktop but is designed mobile-first -->
+  <div id="app" class="mx-auto max-w-md min-h-screen relative flex flex-col">
+
+    <!-- ======================= SPLASH / INTRO ======================= -->
+    <!-- Shown immediately on open, before we even know the auth state. Fun,
+         handwritten wordmark in Caveat — the one deliberately playful note
+         against the otherwise quiet, restrained rest of the app. -->
+    <section id="view-splash" class="flex-1 flex flex-col items-center justify-center gap-3 px-8 cursor-pointer select-none">
+      <h1 class="font-hand text-7xl text-parchment animate-write-in leading-none">Kioku</h1>
+      <svg class="w-32 h-3 text-moss animate-write-in [animation-delay:0.3s]" viewBox="0 0 128 12" fill="none">
+        <path d="M2 8 C 30 2, 60 10, 90 4 S 120 8, 126 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <p class="font-hand text-2xl text-dim animate-write-in [animation-delay:0.5s]">memories, kept quietly</p>
+      <p class="text-dim/50 text-[11px] tracking-widest uppercase mt-6 animate-fade-up [animation-delay:1.1s]">tap to begin</p>
+    </section>
+
+    <!-- ======================= LOADING (initial auth check) ======================= -->
+    <section id="view-loading" class="hidden flex-1 flex flex-col items-center justify-center gap-4">
+      <div id="loading-spinner" class="flex flex-col items-center gap-4">
+        <div class="w-8 h-8 rounded-full border-2 border-hairline border-t-moss animate-spin"></div>
+        <p class="text-dim text-sm tracking-wide">opening the journal…</p>
+      </div>
+      <!-- Shown instead of the spinner if firebaseConfig.js still has placeholder values,
+           so the app never just hangs on a spinner forever with no explanation. -->
+      <div id="loading-config-warning" class="hidden flex flex-col items-center gap-3 px-8 text-center max-w-xs">
+        <svg class="w-8 h-8 text-amber" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        </svg>
+        <p class="font-display text-lg">Firebase isn't set up yet</p>
+        <p class="text-sm text-dim leading-relaxed">
+          <code class="text-parchment bg-ink3 px-1 rounded">firebaseConfig.js</code>
+          still has placeholder values, so Kioku can't reach a real project —
+          that's why it was stuck loading. Paste your Firebase project keys in
+          there, then refresh.
+        </p>
+      </div>
+    </section>
+
+    <!-- ======================= AUTH VIEW ======================= -->
+    <section id="view-auth" class="hidden flex-1 flex flex-col justify-center px-7 py-12">
+      <div class="mb-10 animate-fade-up">
+        <p class="font-display italic text-dim text-sm mb-1">welcome to</p>
+        <h1 class="font-display text-4xl leading-tight">Kioku</h1>
+      </div>
+
+      <!-- Login / Signup toggle -->
+      <div class="flex gap-6 mb-8 border-b border-hairline text-sm font-medium">
+        <button type="button" id="tab-login" class="pb-3 -mb-px border-b-2 border-moss text-parchment transition-colors">Log in</button>
+        <button type="button" id="tab-signup" class="pb-3 -mb-px border-b-2 border-transparent text-dim hover:text-parchment transition-colors">Sign up</button>
+      </div>
+
+      <form id="form-auth" class="flex flex-col gap-4" novalidate>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-xs uppercase tracking-wide text-dim">Email</span>
+          <input type="email" id="input-email" autocomplete="email" required
+            class="bg-ink3 border border-hairline rounded-lg px-4 py-3 text-parchment placeholder-dim/60 focus:border-moss transition-colors" placeholder="you@example.com" />
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-xs uppercase tracking-wide text-dim">Password</span>
+          <input type="password" id="input-password" autocomplete="current-password" required minlength="6"
+            class="bg-ink3 border border-hairline rounded-lg px-4 py-3 text-parchment placeholder-dim/60 focus:border-moss transition-colors" placeholder="At least 6 characters" />
+        </label>
+
+        <p id="auth-error" class="hidden text-rose text-sm -mt-1"></p>
+
+        <button type="submit" id="btn-auth-submit"
+          class="mt-2 bg-moss hover:bg-moss-deep text-ink font-semibold rounded-lg py-3.5 transition-colors flex items-center justify-center gap-2">
+          <span id="btn-auth-label">Log in</span>
+          <svg id="btn-auth-spinner" class="hidden w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+            <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </form>
+
+      <p class="text-xs text-dim/70 text-center mt-8 leading-relaxed">
+        Invite-only. Your entries are visible only to you —<br/>not to the friends you share this app with.
+      </p>
+    </section>
+
+    <!-- ======================= DASHBOARD VIEW ======================= -->
+    <section id="view-dashboard" class="hidden flex-1 flex flex-col">
+      <header class="flex items-center justify-between px-6 pt-8 pb-5">
+        <div>
+          <p class="font-display italic text-dim text-sm">welcome back</p>
+          <h1 id="dashboard-greeting" class="font-display text-2xl">Your pages</h1>
+        </div>
+        <button type="button" id="btn-signout" title="Sign out"
+          class="w-9 h-9 rounded-full bg-ink2 border border-hairline flex items-center justify-center text-dim hover:text-rose hover:border-rose/50 transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </header>
+
+      <!-- Entries feed -->
+      <div id="entries-feed" class="flex-1 px-6 pb-28 flex flex-col gap-4 overflow-y-auto"></div>
+
+      <!-- Empty state -->
+      <div id="dashboard-empty" class="hidden flex-1 flex flex-col items-center justify-center px-10 text-center gap-3 -mt-10">
+        <svg class="w-10 h-10 text-hairline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+        <p class="font-display text-lg text-parchment">No pages yet</p>
+        <p class="text-sm text-dim leading-relaxed">Tap the pen below and write the first one. Or just talk — it'll listen.</p>
+      </div>
+
+      <!-- Feed loading skeleton -->
+      <div id="dashboard-loading" class="px-6 flex flex-col gap-4">
+        <div class="h-24 rounded-2xl bg-ink2 animate-pulse"></div>
+        <div class="h-24 rounded-2xl bg-ink2 animate-pulse"></div>
+      </div>
+
+      <!-- Floating action button -->
+      <button type="button" id="btn-new-entry"
+        class="absolute bottom-7 right-6 w-14 h-14 rounded-full bg-moss text-ink shadow-lg shadow-black/40 flex items-center justify-center hover:bg-moss-deep active:scale-95 transition-all">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+      </button>
+    </section>
+
+    <!-- ======================= EDITOR VIEW ======================= -->
+    <section id="view-editor" class="hidden flex-1 flex flex-col">
+      <header class="flex items-center justify-between px-5 pt-7 pb-3">
+        <button type="button" id="btn-editor-back" class="w-9 h-9 rounded-full flex items-center justify-center text-dim hover:text-parchment transition-colors">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+        <p id="editor-date" class="font-display italic text-dim text-sm"></p>
+        <button type="button" id="btn-save-entry"
+          class="text-moss font-semibold text-sm px-3 py-1.5 rounded-lg hover:bg-ink2 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none">
+          <span id="btn-save-label">Save</span>
+          <svg id="btn-save-spinner" class="hidden w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+            <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <input type="text" id="input-entry-title" maxlength="120"
+        class="bg-transparent px-6 pt-1 pb-2 text-2xl font-display text-parchment placeholder-dim/40 w-full"
+        placeholder="Title this page…" />
+
+      <textarea id="input-entry-text"
+        class="flex-1 bg-transparent px-6 py-3 text-lg leading-relaxed font-serif text-parchment placeholder-dim/50 resize-none w-full"
+        placeholder="Start writing, or press the microphone and just talk…"></textarea>
+
+      <p id="editor-error" class="hidden text-rose text-sm px-6 pb-2"></p>
+
+      <!-- Mic control -->
+      <div class="flex flex-col items-center gap-2 pb-9 pt-2">
+        <div class="relative flex items-center justify-center">
+          <span id="mic-ring-1" class="hidden absolute w-16 h-16 rounded-full bg-amber/40 animate-breathe"></span>
+          <span id="mic-ring-2" class="hidden absolute w-16 h-16 rounded-full bg-amber/40 animate-breathe [animation-delay:0.6s]"></span>
+          <button type="button" id="btn-mic"
+            class="relative w-16 h-16 rounded-full bg-ink2 border border-hairline flex items-center justify-center text-parchment hover:border-moss transition-colors">
+            <svg id="mic-icon" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+        </div>
+        <p id="mic-status" class="text-xs text-dim tracking-wide">tap to talk to write</p>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Firebase v10 modular SDK via CDN -->
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
