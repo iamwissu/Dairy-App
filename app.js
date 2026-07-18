@@ -39,6 +39,8 @@ const loadingConfigWarning = document.getElementById("loading-config-warning");
 const tabLogin = document.getElementById("tab-login");
 const tabSignup = document.getElementById("tab-signup");
 const formAuth = document.getElementById("form-auth");
+const labelNickname = document.getElementById("label-nickname");
+const inputNickname = document.getElementById("input-nickname");
 const inputEmail = document.getElementById("input-email");
 const inputPassword = document.getElementById("input-password");
 const authError = document.getElementById("auth-error");
@@ -119,6 +121,15 @@ function isFirebaseConfigured() {
   );
 }
 
+/**
+ * Prefers the account's nickname (Firebase Auth displayName) for the
+ * dashboard greeting; falls back to the email's local part for older
+ * accounts created before the nickname field existed.
+ */
+function greetingName(user) {
+  return user.displayName?.trim() || user.email?.split("@")[0] || "there";
+}
+
 function beginAppFlow() {
   showView("loading");
 
@@ -134,8 +145,7 @@ function beginAppFlow() {
     stopListeningIfActive();
 
     if (user) {
-      const name = user.email?.split("@")[0] || "there";
-      dashboardGreeting.textContent = `Hi, ${name}`;
+      dashboardGreeting.textContent = `Hi, ${greetingName(user)}`;
       showView("dashboard");
       startDashboardListener(user.uid);
     } else {
@@ -164,6 +174,11 @@ function setAuthMode(mode) {
 
   btnAuthLabel.textContent = isLogin ? "Log in" : "Create account";
   inputPassword.autocomplete = isLogin ? "current-password" : "new-password";
+
+  labelNickname.classList.toggle("hidden", isLogin);
+  inputNickname.required = !isLogin;
+  if (isLogin) inputNickname.value = "";
+
   hideAuthError();
 }
 
@@ -188,11 +203,16 @@ formAuth.addEventListener("submit", async (event) => {
   event.preventDefault();
   hideAuthError();
 
+  const nickname = inputNickname.value.trim();
   const email = inputEmail.value.trim();
   const password = inputPassword.value;
 
   if (!email || !password) {
     showAuthError("Please fill in both fields.");
+    return;
+  }
+  if (authMode === "signup" && !nickname) {
+    showAuthError("Let us know what to call you — add a nickname.");
     return;
   }
 
@@ -201,7 +221,11 @@ formAuth.addEventListener("submit", async (event) => {
     if (authMode === "login") {
       await logIn(auth, email, password);
     } else {
-      await signUp(auth, email, password);
+      await signUp(auth, email, password, nickname);
+      // watchAuthState's listener can fire before updateProfile's displayName
+      // write finishes, so it may briefly show the email-based fallback —
+      // correct it explicitly now that we know signUp() has fully resolved.
+      dashboardGreeting.textContent = `Hi, ${nickname}`;
     }
     // onAuthStateChanged (below) takes it from here — no manual redirect needed.
   } catch (error) {

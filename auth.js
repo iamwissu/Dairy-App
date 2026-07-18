@@ -6,16 +6,23 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  updateProfile,
   signOut,
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
 /**
- * Creates a new account with email + password.
+ * Creates a new account with email + password, and — if a nickname is
+ * given — sets it as the Firebase Auth displayName right away, so the
+ * dashboard greeting has something warmer than the email address to show.
  * @returns {Promise<import("firebase/auth").UserCredential>}
  */
-export function signUp(auth, email, password) {
-  return createUserWithEmailAndPassword(auth, email, password);
+export async function signUp(auth, email, password, nickname) {
+  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  if (nickname && nickname.trim()) {
+    await updateProfile(credential.user, { displayName: nickname.trim() });
+  }
+  return credential;
 }
 
 /**
