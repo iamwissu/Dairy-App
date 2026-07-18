@@ -6,6 +6,7 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   updateProfile,
   signOut,
   onAuthStateChanged,
@@ -23,6 +24,17 @@ export async function signUp(auth, email, password, nickname) {
     await updateProfile(credential.user, { displayName: nickname.trim() });
   }
   return credential;
+}
+
+/**
+ * Sends a password-reset email via Firebase Auth. By default this rejects
+ * with "auth/user-not-found" if no account matches the email — if you'd
+ * rather not reveal whether an email is registered, enable "Email
+ * Enumeration Protection" in Firebase Console → Authentication → Settings,
+ * which makes this always resolve successfully regardless.
+ */
+export function resetPassword(auth, email) {
+  return sendPasswordResetEmail(auth, email);
 }
 
 /**

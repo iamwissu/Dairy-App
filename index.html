@@ -132,6 +132,26 @@
     touch-action: manipulation;
   }
 
+  /* Password-reset modal: fades/opacity-toggles via a class rather than the
+     Tailwind `hidden` utility, so the opacity transition can actually play. */
+  #modal-reset-overlay.modal-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Toast notification: starts invisible and translated down slightly;
+     JS adds .toast-visible to fade + slide it in, then removes it to dismiss. */
+  #toast {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+  }
+  #toast.toast-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
   /* deckled / torn top edge for entry cards — the journal-page signature */
   .torn-edge {
     -webkit-mask-image: linear-gradient(#000 0 0);
@@ -227,6 +247,10 @@
           <input type="password" id="input-password" autocomplete="current-password" required minlength="6"
             class="bg-ink3 border border-hairline rounded-lg px-4 py-3 text-parchment placeholder-dim/60 focus:border-moss transition-colors" placeholder="At least 6 characters" />
         </label>
+
+        <button type="button" id="btn-forgot-password" class="-mt-2 self-end text-xs text-dim hover:text-moss transition-colors">
+          Forgot password?
+        </button>
 
         <p id="auth-error" class="hidden text-rose text-sm -mt-1"></p>
 
@@ -333,6 +357,47 @@
       </div>
     </section>
 
+  </div>
+
+  <!-- ======================= PASSWORD RESET MODAL ======================= -->
+  <div id="modal-reset-overlay"
+    class="fixed inset-0 z-40 bg-ink/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-6 pb-6 sm:pb-6 opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="w-full max-w-sm bg-ink2 border border-hairline rounded-2xl p-6"
+      style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));">
+      <h2 class="font-display text-xl mb-1.5">Reset your password</h2>
+      <p class="text-sm text-dim mb-5 leading-relaxed">We'll email you a link to choose a new one.</p>
+
+      <label class="flex flex-col gap-1.5 mb-4">
+        <span class="text-xs uppercase tracking-wide text-dim">Email</span>
+        <input type="email" id="input-reset-email" autocomplete="email"
+          class="bg-ink3 border border-hairline rounded-lg px-4 py-3 text-parchment placeholder-dim/60 focus:border-moss transition-colors" placeholder="you@example.com" />
+      </label>
+
+      <p id="reset-error" class="hidden text-rose text-sm mb-3"></p>
+
+      <div class="flex gap-3">
+        <button type="button" id="btn-reset-cancel"
+          class="flex-1 py-3 rounded-lg border border-hairline text-dim hover:text-parchment transition-colors">Cancel</button>
+        <button type="button" id="btn-reset-send"
+          class="flex-1 bg-moss hover:bg-moss-deep text-ink font-semibold rounded-lg py-3 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none">
+          <span id="btn-reset-send-label">Send link</span>
+          <svg id="btn-reset-send-spinner" class="hidden w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+            <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= TOAST NOTIFICATION ======================= -->
+  <div id="toast"
+    class="fixed left-1/2 z-50 bg-ink2 border border-moss/50 text-parchment text-sm px-4 py-3 rounded-xl shadow-lg shadow-black/40 flex items-center gap-2 max-w-[90%]"
+    style="bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);">
+    <svg class="w-4 h-4 text-moss shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5"/>
+    </svg>
+    <span id="toast-message"></span>
   </div>
 
   <!-- Firebase v10 modular SDK via CDN -->

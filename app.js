@@ -8,7 +8,7 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-aut
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebaseConfig.js";
-import { signUp, logIn, logOut, watchAuthState, friendlyAuthError } from "./auth.js";
+import { signUp, logIn, logOut, resetPassword, watchAuthState, friendlyAuthError } from "./auth.js";
 import { saveEntry, deleteEntry, watchEntries } from "./firestore.js";
 import { createDictation } from "./speech.js";
 
@@ -47,6 +47,20 @@ const authError = document.getElementById("auth-error");
 const btnAuthSubmit = document.getElementById("btn-auth-submit");
 const btnAuthLabel = document.getElementById("btn-auth-label");
 const btnAuthSpinner = document.getElementById("btn-auth-spinner");
+const btnForgotPassword = document.getElementById("btn-forgot-password");
+
+// Password reset modal
+const modalResetOverlay = document.getElementById("modal-reset-overlay");
+const inputResetEmail = document.getElementById("input-reset-email");
+const resetError = document.getElementById("reset-error");
+const btnResetCancel = document.getElementById("btn-reset-cancel");
+const btnResetSend = document.getElementById("btn-reset-send");
+const btnResetSendLabel = document.getElementById("btn-reset-send-label");
+const btnResetSendSpinner = document.getElementById("btn-reset-send-spinner");
+
+// Toast notification
+const toast = document.getElementById("toast");
+const toastMessage = document.getElementById("toast-message");
 
 // Dashboard view
 const dashboardGreeting = document.getElementById("dashboard-greeting");
@@ -179,6 +193,8 @@ function setAuthMode(mode) {
   inputNickname.required = !isLogin;
   if (isLogin) inputNickname.value = "";
 
+  btnForgotPassword.classList.toggle("hidden", !isLogin);
+
   hideAuthError();
 }
 
@@ -237,6 +253,85 @@ formAuth.addEventListener("submit", async (event) => {
 
 btnSignout.addEventListener("click", () => {
   logOut(auth).catch((error) => console.error("Sign-out failed:", error));
+});
+
+// ---------------------------------------------------------------------------
+// Toast notifications
+// ---------------------------------------------------------------------------
+let toastTimer = null;
+
+function showToast(message, durationMs = 4000) {
+  toastMessage.textContent = message;
+  toast.classList.add("toast-visible");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.classList.remove("toast-visible");
+  }, durationMs);
+}
+
+// ---------------------------------------------------------------------------
+// Forgot password / reset modal
+// ---------------------------------------------------------------------------
+function showResetError(message) {
+  resetError.textContent = message;
+  resetError.classList.remove("hidden");
+}
+function hideResetError() {
+  resetError.classList.add("hidden");
+}
+
+function setResetSubmitting(isSubmitting) {
+  btnResetSend.disabled = isSubmitting;
+  btnResetSendLabel.classList.toggle("hidden", isSubmitting);
+  btnResetSendSpinner.classList.toggle("hidden", !isSubmitting);
+}
+
+function openResetModal() {
+  // Pre-fill with whatever's already in the login email field, if anything.
+  inputResetEmail.value = inputEmail.value.trim();
+  hideResetError();
+  modalResetOverlay.classList.add("modal-visible");
+  window.setTimeout(() => inputResetEmail.focus(), 50);
+}
+
+function closeResetModal() {
+  modalResetOverlay.classList.remove("modal-visible");
+}
+
+btnForgotPassword.addEventListener("click", openResetModal);
+btnResetCancel.addEventListener("click", closeResetModal);
+
+// Clicking the dimmed backdrop (not the card itself) also dismisses it.
+modalResetOverlay.addEventListener("click", (event) => {
+  if (event.target === modalResetOverlay) closeResetModal();
+});
+
+// Escape key dismisses it too, for anyone on a physical keyboard.
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && modalResetOverlay.classList.contains("modal-visible")) {
+    closeResetModal();
+  }
+});
+
+btnResetSend.addEventListener("click", async () => {
+  const email = inputResetEmail.value.trim();
+  hideResetError();
+
+  if (!email) {
+    showResetError("Enter the email address for your account.");
+    return;
+  }
+
+  setResetSubmitting(true);
+  try {
+    await resetPassword(auth, email);
+    closeResetModal();
+    showToast("Check your inbox — we've sent a password reset link.");
+  } catch (error) {
+    showResetError(friendlyAuthError(error));
+  } finally {
+    setResetSubmitting(false);
+  }
 });
 
 // ---------------------------------------------------------------------------
