@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <link rel="icon" type="image/png" href="./favicon.png">
+<!-- iOS reads THIS tag for the homescreen icon — it ignores rel="icon" for
+     that purpose, which is why the icon was falling back to a generated
+     black circle with a letter in it before this was added. -->
+<link rel="apple-touch-icon" href="./favicon.png">
+<!-- Android/Chrome "Add to Home Screen" reads its icon from the manifest
+     below, not from rel="icon" either. -->
+<link rel="manifest" href="./manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>Kioku — a private diary</title>
 <meta name="description" content="Kioku: a private, cloud-synced diary for a small circle of friends." />

@@ -1,0 +1,14 @@
+{
+  "name": "Kioku",
+  "short_name": "Kioku",
+  "description": "A private, cloud-synced diary for a small circle of friends.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#141b17",
+  "theme_color": "#141b17",
+  "icons": [
+    { "src": "./favicon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./favicon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

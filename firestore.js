@@ -7,6 +7,7 @@
 import {
   collection,
   addDoc,
+  updateDoc,
   deleteDoc,
   doc,
   query,
@@ -32,6 +33,19 @@ export function saveEntry(db, userId, title, text) {
     text,
     createdAt: serverTimestamp(), // set by the Firestore server, not the client clock
   });
+}
+
+/**
+ * Updates the title/text of an existing diary entry (opened from the
+ * dashboard and re-saved). Deliberately leaves createdAt untouched, so
+ * editing a page doesn't change where it sits in the "newest first" feed.
+ * @param {Firestore} db
+ * @param {string} entryId
+ * @param {string} title
+ * @param {string} text
+ */
+export function updateEntry(db, entryId, title, text) {
+  return updateDoc(doc(db, ENTRIES_COLLECTION, entryId), { title, text });
 }
 
 /**

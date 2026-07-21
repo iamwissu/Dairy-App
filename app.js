@@ -9,7 +9,7 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.1/firebas
 
 import { firebaseConfig } from "./firebaseConfig.js";
 import { signUp, logIn, logOut, resetPassword, watchAuthState, friendlyAuthError } from "./auth.js";
-import { saveEntry, deleteEntry, watchEntries } from "./firestore.js";
+import { saveEntry, updateEntry, deleteEntry, watchEntries } from "./firestore.js";
 import { createDictation } from "./speech.js";
 
 // ---------------------------------------------------------------------------
@@ -93,6 +93,7 @@ let currentUser = null;
 let unsubscribeEntries = null; // Firestore listener teardown
 let dictation = null; // active SpeechRecognition wrapper, if any
 let isListening = false;
+let editingEntryId = null; // null = writing a new entry; otherwise the id of the entry being edited
 
 // ---------------------------------------------------------------------------
 // View switching
@@ -368,7 +369,7 @@ function renderEntries(entries) {
 
     const card = document.createElement("article");
     card.className =
-      "torn-edge bg-ink2 rounded-b-2xl border border-hairline/70 border-t-0 overflow-hidden animate-fade-up hover:border-hairline transition-colors";
+      "torn-edge bg-ink2 rounded-b-2xl border border-hairline/70 border-t-0 overflow-hidden animate-fade-up hover:border-hairline transition-colors cursor-pointer";
     card.innerHTML = `
       <div class="flex items-start gap-4 px-5 py-4">
         <div class="min-w-0 flex-1">
@@ -383,6 +384,12 @@ function renderEntries(entries) {
         </button>
       </div>
     `;
+    // Opens the entry for viewing/editing — but not when the click landed on
+    // the delete button, which lives inside this same card.
+    card.addEventListener("click", (event) => {
+      if (event.target.closest(".btn-delete-entry")) return;
+      openEditor(entry);
+    });
     entriesFeed.appendChild(card);
   }
 
@@ -438,26 +445,44 @@ function stopDashboardListener() {
   }
 }
 
-btnNewEntry.addEventListener("click", () => openEditor());
+btnNewEntry.addEventListener("click", () => openEditor(null));
 btnEditorBack.addEventListener("click", () => closeEditor());
 
 // ---------------------------------------------------------------------------
 // Editor view logic
 // ---------------------------------------------------------------------------
-function openEditor() {
-  inputEntryTitle.value = "";
-  inputEntryText.value = "";
+/**
+ * Opens the editor. Pass an existing entry object (as received from
+ * Firestore, with .id/.title/.text/.createdAt) to view/edit it — or call
+ * with no argument (or null) to start a blank new entry.
+ */
+function openEditor(entryToEdit = null) {
   hideEditorError();
-  editorDate.textContent = new Date().toLocaleDateString(undefined, {
-    weekday: "long", month: "long", day: "numeric",
-  });
-  showView("editor");
   stopListeningIfActive();
+
+  if (entryToEdit) {
+    editingEntryId = entryToEdit.id;
+    inputEntryTitle.value = entryToEdit.title || "";
+    inputEntryText.value = entryToEdit.text || "";
+    editorDate.textContent = formatEntryDate(entryToEdit.createdAt).full;
+    btnSaveLabel.textContent = "Update";
+  } else {
+    editingEntryId = null;
+    inputEntryTitle.value = "";
+    inputEntryText.value = "";
+    editorDate.textContent = new Date().toLocaleDateString(undefined, {
+      weekday: "long", month: "long", day: "numeric",
+    });
+    btnSaveLabel.textContent = "Save";
+  }
+
+  showView("editor");
   setTimeout(() => inputEntryTitle.focus(), 50);
 }
 
 function closeEditor() {
   stopListeningIfActive();
+  editingEntryId = null;
   showView("dashboard");
 }
 
@@ -491,7 +516,11 @@ btnSaveEntry.addEventListener("click", async () => {
 
   setSaveSubmitting(true);
   try {
-    await saveEntry(db, currentUser.uid, title, text);
+    if (editingEntryId) {
+      await updateEntry(db, editingEntryId, title, text);
+    } else {
+      await saveEntry(db, currentUser.uid, title, text);
+    }
     closeEditor();
   } catch (error) {
     console.error("Failed to save entry:", error);
