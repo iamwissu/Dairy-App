@@ -69,13 +69,22 @@ const dashboardEmpty = document.getElementById("dashboard-empty");
 const dashboardLoading = document.getElementById("dashboard-loading");
 const btnNewEntry = document.getElementById("btn-new-entry");
 const btnSignout = document.getElementById("btn-signout");
+const btnThemeToggle = document.getElementById("btn-theme-toggle");
+const themeMenu = document.getElementById("theme-menu");
 
 // Editor view
 const btnEditorBack = document.getElementById("btn-editor-back");
 const editorDate = document.getElementById("editor-date");
+const btnCancelEdit = document.getElementById("btn-cancel-edit");
+const btnEditEntry = document.getElementById("btn-edit-entry");
 const inputEntryTitle = document.getElementById("input-entry-title");
 const inputEntryText = document.getElementById("input-entry-text");
+const readerTitle = document.getElementById("reader-title");
+const readerText = document.getElementById("reader-text");
 const editorError = document.getElementById("editor-error");
+const editorToolbar = document.getElementById("editor-toolbar");
+const btnPunctuate = document.getElementById("btn-punctuate");
+const editorMicSection = document.getElementById("editor-mic-section");
 const btnSaveEntry = document.getElementById("btn-save-entry");
 const btnSaveLabel = document.getElementById("btn-save-label");
 const btnSaveSpinner = document.getElementById("btn-save-spinner");
@@ -93,7 +102,69 @@ let currentUser = null;
 let unsubscribeEntries = null; // Firestore listener teardown
 let dictation = null; // active SpeechRecognition wrapper, if any
 let isListening = false;
-let editingEntryId = null; // null = writing a new entry; otherwise the id of the entry being edited
+let editingEntryId = null; // id of the entry currently open, or null while writing a new one
+let editorMode = "new"; // "new" | "read" | "edit" — see openEditor()/enterReadMode()/enterWriteMode()
+let readModeEntry = null; // the entry object currently shown in Reading Mode (used by Edit/Cancel)
+const THEMES = ["spring", "summer", "fall", "winter"];
+const THEME_STORAGE_KEY = "kioku-theme";
+
+// ---------------------------------------------------------------------------
+// Seasonal themes
+// ---------------------------------------------------------------------------
+// Matches each theme's --c-ink value (see index.html) so the mobile browser/
+// PWA status bar tints along with the rest of the UI rather than staying
+// fixed on Spring's color.
+const THEME_STATUS_BAR_COLOR = {
+  spring: "#141b17",
+  summer: "#1c1410",
+  fall:   "#1a140d",
+  winter: "#101620",
+};
+const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+
+function applyTheme(theme) {
+  const safeTheme = THEMES.includes(theme) ? theme : "spring";
+  document.documentElement.setAttribute("data-theme", safeTheme);
+  if (metaThemeColor) metaThemeColor.setAttribute("content", THEME_STATUS_BAR_COLOR[safeTheme]);
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, safeTheme);
+  } catch {
+    // Private browsing / storage disabled — the theme just won't persist across visits.
+  }
+}
+
+(function loadSavedTheme() {
+  let saved = null;
+  try {
+    saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+  } catch {
+    // ignore — falls back to the default below
+  }
+  applyTheme(saved || "spring");
+})();
+
+function toggleThemeMenu(show) {
+  themeMenu.classList.toggle("menu-visible", show);
+}
+
+btnThemeToggle.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleThemeMenu(!themeMenu.classList.contains("menu-visible"));
+});
+
+themeMenu.querySelectorAll(".theme-option").forEach((option) => {
+  option.addEventListener("click", () => {
+    applyTheme(option.dataset.themeValue);
+    toggleThemeMenu(false);
+  });
+});
+
+// Tapping anywhere outside the popover closes it.
+document.addEventListener("click", (event) => {
+  if (!themeMenu.classList.contains("menu-visible")) return;
+  if (btnThemeToggle.contains(event.target) || themeMenu.contains(event.target)) return;
+  toggleThemeMenu(false);
+});
 
 // ---------------------------------------------------------------------------
 // View switching
@@ -453,8 +524,9 @@ btnEditorBack.addEventListener("click", () => closeEditor());
 // ---------------------------------------------------------------------------
 /**
  * Opens the editor. Pass an existing entry object (as received from
- * Firestore, with .id/.title/.text/.createdAt) to view/edit it — or call
- * with no argument (or null) to start a blank new entry.
+ * Firestore, with .id/.title/.text/.createdAt) to view it in read-only
+ * Reading Mode — or call with no argument (or null) to start a blank new
+ * entry, which is always immediately editable.
  */
 function openEditor(entryToEdit = null) {
   hideEditorError();
@@ -462,27 +534,83 @@ function openEditor(entryToEdit = null) {
 
   if (entryToEdit) {
     editingEntryId = entryToEdit.id;
-    inputEntryTitle.value = entryToEdit.title || "";
-    inputEntryText.value = entryToEdit.text || "";
+    readModeEntry = entryToEdit;
     editorDate.textContent = formatEntryDate(entryToEdit.createdAt).full;
-    btnSaveLabel.textContent = "Update";
+    enterReadMode();
   } else {
     editingEntryId = null;
-    inputEntryTitle.value = "";
-    inputEntryText.value = "";
+    readModeEntry = null;
     editorDate.textContent = new Date().toLocaleDateString(undefined, {
       weekday: "long", month: "long", day: "numeric",
     });
-    btnSaveLabel.textContent = "Save";
+    enterWriteMode({ title: "", text: "" });
   }
 
   showView("editor");
-  setTimeout(() => inputEntryTitle.focus(), 50);
+  if (editorMode !== "read") setTimeout(() => inputEntryTitle.focus(), 50);
 }
+
+/** Read-only view of an existing entry: static, justified text, nothing editable. */
+function enterReadMode() {
+  editorMode = "read";
+
+  const title = readModeEntry.title?.trim() ? readModeEntry.title.trim() : "Untitled entry";
+  readerTitle.textContent = title;
+  readerText.textContent = readModeEntry.text || "";
+
+  readerTitle.classList.remove("hidden");
+  readerText.classList.remove("hidden");
+  inputEntryTitle.classList.add("hidden");
+  inputEntryText.classList.add("hidden");
+  editorToolbar.classList.add("hidden");
+  editorMicSection.classList.add("hidden");
+
+  btnEditEntry.classList.remove("hidden");
+  btnCancelEdit.classList.add("hidden");
+  btnSaveEntry.classList.add("hidden");
+}
+
+/**
+ * Editable view — used both for a brand-new entry and for editing an
+ * existing one. `{ title, text }` seeds the fields; whether Cancel appears
+ * depends on editingEntryId (a new entry has nothing to "cancel" back to).
+ */
+function enterWriteMode({ title, text }) {
+  editorMode = editingEntryId ? "edit" : "new";
+
+  inputEntryTitle.value = title;
+  inputEntryText.value = text;
+
+  inputEntryTitle.classList.remove("hidden");
+  inputEntryText.classList.remove("hidden");
+  editorToolbar.classList.remove("hidden");
+  editorMicSection.classList.remove("hidden");
+  readerTitle.classList.add("hidden");
+  readerText.classList.add("hidden");
+
+  btnEditEntry.classList.add("hidden");
+  btnCancelEdit.classList.toggle("hidden", editorMode !== "edit");
+  btnSaveEntry.classList.remove("hidden");
+  btnSaveLabel.textContent = editorMode === "edit" ? "Save Changes" : "Save";
+}
+
+btnEditEntry.addEventListener("click", () => {
+  hideEditorError();
+  enterWriteMode({ title: readModeEntry.title || "", text: readModeEntry.text || "" });
+  setTimeout(() => inputEntryTitle.focus(), 50);
+});
+
+btnCancelEdit.addEventListener("click", () => {
+  hideEditorError();
+  stopListeningIfActive();
+  enterReadMode(); // readModeEntry was never touched, so this discards any unsaved changes
+});
 
 function closeEditor() {
   stopListeningIfActive();
   editingEntryId = null;
+  readModeEntry = null;
+  editorMode = "new";
   showView("dashboard");
 }
 
@@ -518,16 +646,73 @@ btnSaveEntry.addEventListener("click", async () => {
   try {
     if (editingEntryId) {
       await updateEntry(db, editingEntryId, title, text);
+      // Back to Reading Mode with the freshly-saved content, not the dashboard —
+      // matches "once saved, it returns to Reading Mode".
+      readModeEntry = { ...readModeEntry, title, text };
+      stopListeningIfActive();
+      enterReadMode();
     } else {
       await saveEntry(db, currentUser.uid, title, text);
+      closeEditor();
     }
-    closeEditor();
   } catch (error) {
     console.error("Failed to save entry:", error);
     showEditorError("Couldn't save that page. Check your connection and try again.");
   } finally {
     setSaveSubmitting(false);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Smart Punctuation Helper ("Format & Punctuate")
+// ---------------------------------------------------------------------------
+/**
+ * Light cleanup pass for dictated/typed text: collapses accidental double
+ * spaces, capitalizes the start of each sentence (and line), straightens
+ * stray spaces before punctuation, and makes sure the entry ends with a
+ * proper closing mark. Deliberately conservative — it reformats spacing and
+ * capitalization only, and never touches the words themselves.
+ */
+function formatAndPunctuate(rawText) {
+  let text = rawText.trim();
+  if (!text) return text;
+
+  // Collapse runs of spaces/tabs into one (but leave intentional line breaks alone).
+  text = text.replace(/[ \t]{2,}/g, " ");
+
+  // Remove stray space(s) directly before punctuation — a common
+  // speech-to-text artifact ("well ,  that" → "well, that").
+  text = text.replace(/[ \t]+([.,!?;:])/g, "$1");
+
+  // Capitalize the very first letter of the entry.
+  text = text.replace(/^([a-z])/, (m, ch) => ch.toUpperCase());
+
+  // Capitalize the first letter after sentence-ending punctuation.
+  text = text.replace(/([.!?]\s+)([a-z])/g, (m, sep, ch) => sep + ch.toUpperCase());
+
+  // Capitalize the first letter of each new line/paragraph.
+  text = text.replace(/(\n\s*)([a-z])/g, (m, sep, ch) => sep + ch.toUpperCase());
+
+  // Capitalize a lone "i" used as a pronoun.
+  text = text.replace(/\bi\b/g, "I");
+
+  // Make sure the entry ends with proper closing punctuation.
+  if (!/[.!?]["'’”)\]]?$/.test(text)) {
+    text += ".";
+  }
+
+  return text;
+}
+
+btnPunctuate.addEventListener("click", () => {
+  hideEditorError();
+  const current = inputEntryText.value;
+  if (!current.trim()) {
+    showEditorError("Write something first — then format it.");
+    return;
+  }
+  inputEntryText.value = formatAndPunctuate(current);
+  showToast("Formatted your text.");
 });
 
 // ---------------------------------------------------------------------------

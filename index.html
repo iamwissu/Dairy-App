@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="spring">
 <head>
 <meta charset="UTF-8" />
 <link rel="icon" type="image/png" href="./favicon.png">
@@ -31,16 +31,19 @@
     theme: {
       extend: {
         colors: {
-          ink:        '#141b17', // page background — deep forest-charcoal
-          ink2:       '#1c2622', // card / surface
-          ink3:       '#26322c', // inputs, elevated surface
-          hairline:   '#33403a', // borders, dividers
-          parchment:  '#eee7d6', // primary text — warm paper
-          dim:        '#a29a8c', // secondary text
-          moss:       '#7c9473', // primary accent
-          'moss-deep':'#5c7355', // accent hover
-          amber:      '#d4a05f', // voice / listening accent
-          rose:       '#c17767', // danger / delete
+          // Each token resolves to a CSS variable (see :root / [data-theme] below)
+          // rather than a fixed hex — this is what lets the whole palette swap
+          // when the season changes, without touching a single class in the HTML.
+          ink:        'rgb(var(--c-ink) / <alpha-value>)',        // page background
+          ink2:       'rgb(var(--c-ink2) / <alpha-value>)',       // card / surface
+          ink3:       'rgb(var(--c-ink3) / <alpha-value>)',       // inputs, elevated surface
+          hairline:   'rgb(var(--c-hairline) / <alpha-value>)',   // borders, dividers
+          parchment:  'rgb(var(--c-parchment) / <alpha-value>)',  // primary text
+          dim:        'rgb(var(--c-dim) / <alpha-value>)',        // secondary text
+          moss:       'rgb(var(--c-moss) / <alpha-value>)',       // primary accent
+          'moss-deep':'rgb(var(--c-moss-deep) / <alpha-value>)',  // accent hover
+          amber:      'rgb(var(--c-amber) / <alpha-value>)',      // voice / listening accent
+          rose:       'rgb(var(--c-rose) / <alpha-value>)',       // danger / delete
         },
         fontFamily: {
           display: ['"Fraunces"', 'serif'],
@@ -82,11 +85,71 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Literata:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet">
 
 <style>
-  html, body { background: #141b17; }
-  ::selection { background: #7c9473; color: #141b17; }
+  /* ==================================================================== */
+  /* SEASONAL THEMES                                                       */
+  /* Each variable is an "R G B" triplet (no commas) so Tailwind's         */
+  /* rgb(var(--x) / <alpha-value>) pattern above can still apply opacity   */
+  /* modifiers like bg-ink2/80 normally. Swapping the data-theme attribute */
+  /* on <html> (done in app.js) changes every one of these at once, and    */
+  /* because the elements that consume them already transition            */
+  /* background-color/color/border-color, the swap fades rather than      */
+  /* snaps — see the "transition-colors" utility already used throughout. */
+  /* ==================================================================== */
+  :root,
+  [data-theme="spring"] {
+    --c-ink:        20 27 23;    /* #141b17 deep forest-charcoal */
+    --c-ink2:       28 38 34;    /* #1c2622 */
+    --c-ink3:       38 50 44;    /* #26322c */
+    --c-hairline:   51 64 58;    /* #33403a */
+    --c-parchment:  238 231 214; /* #eee7d6 warm paper */
+    --c-dim:        162 154 140; /* #a29a8c */
+    --c-moss:       124 148 115; /* #7c9473 primary accent */
+    --c-moss-deep:  92 115 85;   /* #5c7355 */
+    --c-amber:      212 160 95;  /* #d4a05f */
+    --c-rose:       193 119 103; /* #c17767 */
+  }
+  [data-theme="summer"] {
+    --c-ink:        28 20 16;    /* warm near-black brown */
+    --c-ink2:       36 27 21;
+    --c-ink3:       48 35 25;
+    --c-hairline:   74 53 36;
+    --c-parchment:  251 232 207; /* sun-bleached cream */
+    --c-dim:        201 165 131;
+    --c-moss:       226 115 63;  /* sunset orange — primary accent */
+    --c-moss-deep:  194 90 44;
+    --c-amber:      240 180 41;  /* golden yellow */
+    --c-rose:       216 79 79;   /* poppy red */
+  }
+  [data-theme="fall"] {
+    --c-ink:        26 20 13;    /* deep bark brown */
+    --c-ink2:       34 26 17;
+    --c-ink3:       46 36 22;
+    --c-hairline:   74 58 34;
+    --c-parchment:  240 224 192; /* honey cream */
+    --c-dim:        184 155 110;
+    --c-moss:       201 138 44;  /* honey amber — primary accent */
+    --c-moss-deep:  166 111 32;
+    --c-amber:      224 169 64;  /* deep gold */
+    --c-rose:       181 83 58;   /* warm brick */
+  }
+  [data-theme="winter"] {
+    --c-ink:        16 22 28;    /* cool slate-black */
+    --c-ink2:       22 31 39;
+    --c-ink3:       30 42 52;
+    --c-hairline:   46 65 80;
+    --c-parchment:  234 242 246; /* soft ice white */
+    --c-dim:        144 168 184;
+    --c-moss:       90 155 194;  /* ice blue — primary accent */
+    --c-moss-deep:  67 128 163;
+    --c-amber:      207 162 95;  /* muted candle gold, kept warm for contrast */
+    --c-rose:       193 97 110;  /* cool berry */
+  }
+
+  html, body { background: rgb(var(--c-ink)); }
+  ::selection { background: rgb(var(--c-moss)); color: rgb(var(--c-ink)); }
   /* thin, warm scrollbar */
   ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-thumb { background: #33403a; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgb(var(--c-hairline)); border-radius: 4px; }
 
   /* ------------------------------------------------------------------ */
   /* Native-app-shell behaviors — matters once this is wrapped as a PWA / */
@@ -159,6 +222,44 @@
     transform: translate(-50%, 0);
   }
 
+  /* Decorative seasonal background icons — a faint, wallpaper-like texture
+     that changes with the theme. Sits behind #app (z-0) so it never
+     intercepts taps or competes with real content. */
+  #theme-decor {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  #theme-decor .decor-group { display: none; }
+  html[data-theme="spring"] #theme-decor .decor-group[data-season="spring"],
+  html[data-theme="summer"] #theme-decor .decor-group[data-season="summer"],
+  html[data-theme="fall"]   #theme-decor .decor-group[data-season="fall"],
+  html[data-theme="winter"] #theme-decor .decor-group[data-season="winter"] {
+    display: block;
+  }
+  #theme-decor svg {
+    position: absolute;
+    color: rgb(var(--c-moss));
+    opacity: 0.07;
+    transition: opacity 0.6s ease, color 0.6s ease;
+  }
+
+  /* Theme-switcher popover: same opacity/transform toggle pattern as the
+     reset modal, so it fades instead of snapping open/shut. */
+  #theme-menu {
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  #theme-menu.menu-visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
   /* deckled / torn top edge for entry cards — the journal-page signature */
   .torn-edge {
     -webkit-mask-image: linear-gradient(#000 0 0);
@@ -184,10 +285,35 @@
 </style>
 </head>
 
-<body class="bg-ink text-parchment font-sans min-h-screen antialiased">
+<body class="bg-ink text-parchment font-sans min-h-screen antialiased transition-colors duration-500">
+
+  <!-- ======================= SEASONAL BACKGROUND DECOR ======================= -->
+  <!-- Faint, oversized icons scattered behind the app shell — purely -->
+  <!-- decorative texture, swapped by CSS based on html[data-theme]. -->
+  <div id="theme-decor" aria-hidden="true">
+    <div class="decor-group" data-season="spring">
+      <svg style="top:6%; left:-4%; width:180px; height:180px; transform:rotate(-18deg);" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7 2 3 6 3 12c6 0 10-4 10-10zM12 22c5 0 9-4 9-10-6 0-10 4-10 10z"/></svg>
+      <svg style="top:38%; right:-6%; width:220px; height:220px; transform:rotate(24deg);" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7 2 3 6 3 12c6 0 10-4 10-10zM12 22c5 0 9-4 9-10-6 0-10 4-10 10z"/></svg>
+      <svg style="bottom:4%; left:14%; width:140px; height:140px; transform:rotate(60deg);" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7 2 3 6 3 12c6 0 10-4 10-10zM12 22c5 0 9-4 9-10-6 0-10 4-10 10z"/></svg>
+    </div>
+    <div class="decor-group" data-season="summer">
+      <svg style="top:4%; right:-8%; width:240px; height:240px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" stroke-linecap="round"/></svg>
+      <svg style="bottom:8%; left:-6%; width:160px; height:160px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" stroke-linecap="round"/></svg>
+    </div>
+    <div class="decor-group" data-season="fall">
+      <svg style="top:8%; left:-5%; width:190px; height:190px; transform:rotate(-12deg);" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3 3 4 5 4-1 2-1 4 1 5-2 1-2 3-1 5-2 0-4 1-5 4-1-3-3-4-5-4 1-2 1-4-1-5 2-1 2-3 1-5 2 0 4-1 5-4z"/></svg>
+      <svg style="top:42%; right:-7%; width:220px; height:220px; transform:rotate(20deg);" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3 3 4 5 4-1 2-1 4 1 5-2 1-2 3-1 5-2 0-4 1-5 4-1-3-3-4-5-4 1-2 1-4-1-5 2-1 2-3 1-5 2 0 4-1 5-4z"/></svg>
+      <svg style="bottom:5%; left:16%; width:130px; height:130px; transform:rotate(50deg);" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3 3 4 5 4-1 2-1 4 1 5-2 1-2 3-1 5-2 0-4 1-5 4-1-3-3-4-5-4 1-2 1-4-1-5 2-1 2-3 1-5 2 0 4-1 5-4z"/></svg>
+    </div>
+    <div class="decor-group" data-season="winter">
+      <svg style="top:5%; right:-6%; width:210px; height:210px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2v20M4 7l16 10M20 7 4 17M12 2 9 5M12 2l3 3M12 22l-3-3M12 22l3-3M4 7l1 4M4 7l4-1M20 7l-1 4M20 7l-4-1M4 17l4 1M4 17l1-4M20 17l-4 1M20 17l-1-4" stroke-linecap="round"/></svg>
+      <svg style="bottom:6%; left:-5%; width:160px; height:160px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2v20M4 7l16 10M20 7 4 17M12 2 9 5M12 2l3 3M12 22l-3-3M12 22l3-3M4 7l1 4M4 7l4-1M20 7l-1 4M20 7l-4-1M4 17l4 1M4 17l1-4M20 17l-4 1M20 17l-1-4" stroke-linecap="round"/></svg>
+      <svg style="top:45%; left:22%; width:120px; height:120px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2v20M4 7l16 10M20 7 4 17M12 2 9 5M12 2l3 3M12 22l-3-3M12 22l3-3M4 7l1 4M4 7l4-1M20 7l-1 4M20 7l-4-1M4 17l4 1M4 17l1-4M20 17l-4 1M20 17l-1-4" stroke-linecap="round"/></svg>
+    </div>
+  </div>
 
   <!-- App shell — capped width so it reads well on desktop but is designed mobile-first -->
-  <div id="app" class="mx-auto max-w-md min-h-screen relative flex flex-col">
+  <div id="app" class="mx-auto max-w-md min-h-screen relative z-10 flex flex-col">
 
     <!-- ======================= SPLASH / INTRO ======================= -->
     <!-- Shown immediately on open, before we even know the auth state. Fun,
@@ -283,12 +409,37 @@
           <p class="font-display italic text-dim text-sm">welcome back</p>
           <h1 id="dashboard-greeting" class="font-display text-2xl">Your pages</h1>
         </div>
-        <button type="button" id="btn-signout" title="Sign out"
-          class="w-9 h-9 rounded-full bg-ink2 border border-hairline flex items-center justify-center text-dim hover:text-rose hover:border-rose/50 transition-colors">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-        </button>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <button type="button" id="btn-theme-toggle" title="Change theme"
+              class="w-9 h-9 rounded-full bg-ink2 border border-hairline flex items-center justify-center text-dim hover:text-moss hover:border-moss/50 transition-colors">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/>
+                <path d="M12 2a10 10 0 1 0 9.54 13.14c.14-.44-.24-.86-.7-.79a4 4 0 0 1-4.6-4.6c.07-.46-.35-.84-.79-.7A10 10 0 0 1 12 2z"/>
+              </svg>
+            </button>
+            <div id="theme-menu" class="absolute right-0 top-11 z-30 w-44 bg-ink2 border border-hairline rounded-xl p-1.5 shadow-lg shadow-black/40">
+              <button type="button" class="theme-option w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-parchment hover:bg-ink3 transition-colors" data-theme-value="spring">
+                <span class="w-3 h-3 rounded-full shrink-0" style="background:#7c9473"></span> Spring
+              </button>
+              <button type="button" class="theme-option w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-parchment hover:bg-ink3 transition-colors" data-theme-value="summer">
+                <span class="w-3 h-3 rounded-full shrink-0" style="background:#e2733f"></span> Summer
+              </button>
+              <button type="button" class="theme-option w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-parchment hover:bg-ink3 transition-colors" data-theme-value="fall">
+                <span class="w-3 h-3 rounded-full shrink-0" style="background:#c98a2c"></span> Fall
+              </button>
+              <button type="button" class="theme-option w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-parchment hover:bg-ink3 transition-colors" data-theme-value="winter">
+                <span class="w-3 h-3 rounded-full shrink-0" style="background:#5a9bc2"></span> Winter
+              </button>
+            </div>
+          </div>
+          <button type="button" id="btn-signout" title="Sign out"
+            class="w-9 h-9 rounded-full bg-ink2 border border-hairline flex items-center justify-center text-dim hover:text-rose hover:border-rose/50 transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </header>
 
       <!-- Entries feed -->
@@ -319,6 +470,11 @@
     </section>
 
     <!-- ======================= EDITOR VIEW ======================= -->
+    <!-- Three modes, toggled entirely in JS (see openEditor/enterReadMode/
+         enterWriteMode in app.js):
+           "new"  — writing a brand-new entry (editable, single Save button)
+           "read" — viewing an existing entry (static, justified text, Edit button)
+           "edit" — editing an existing entry (editable, Cancel + Save Changes) -->
     <section id="view-editor" class="hidden flex-1 flex flex-col">
       <header class="flex items-center justify-between px-5 pt-7 pb-3">
         <button type="button" id="btn-editor-back" class="w-9 h-9 rounded-full flex items-center justify-center text-dim hover:text-parchment transition-colors">
@@ -327,28 +483,51 @@
           </svg>
         </button>
         <p id="editor-date" class="font-display italic text-dim text-sm"></p>
-        <button type="button" id="btn-save-entry"
-          class="text-moss font-semibold text-sm px-3 py-1.5 rounded-lg hover:bg-ink2 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none">
-          <span id="btn-save-label">Save</span>
-          <svg id="btn-save-spinner" class="hidden w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
-            <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-          </svg>
-        </button>
+        <div class="flex items-center gap-1">
+          <button type="button" id="btn-cancel-edit"
+            class="hidden text-dim font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-ink2 hover:text-parchment transition-colors">Cancel</button>
+          <button type="button" id="btn-edit-entry"
+            class="hidden text-moss font-semibold text-sm px-3 py-1.5 rounded-lg hover:bg-ink2 transition-colors">Edit</button>
+          <button type="button" id="btn-save-entry"
+            class="text-moss font-semibold text-sm px-3 py-1.5 rounded-lg hover:bg-ink2 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none">
+            <span id="btn-save-label">Save</span>
+            <svg id="btn-save-spinner" class="hidden w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+              <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
       </header>
 
+      <!-- Editable fields (write / new / edit modes) -->
       <input type="text" id="input-entry-title" maxlength="120"
         class="bg-transparent px-6 pt-1 pb-2 text-2xl font-display text-parchment placeholder-dim/40 w-full"
         placeholder="Title this page…" />
 
       <textarea id="input-entry-text"
-        class="flex-1 bg-transparent px-6 py-3 text-lg leading-relaxed font-serif text-parchment placeholder-dim/50 resize-none w-full"
+        class="flex-1 bg-transparent px-6 py-3 text-lg leading-relaxed font-serif text-parchment placeholder-dim/50 resize-none w-full text-justify"
         placeholder="Start writing, or press the microphone and just talk…"></textarea>
+
+      <!-- Static reading view (read mode) — plain text, justified like a
+           printed page, with nothing editable or accidentally deletable. -->
+      <h2 id="reader-title" class="hidden px-6 pt-1 pb-2 text-2xl font-display text-parchment"></h2>
+      <p id="reader-text" class="hidden flex-1 px-6 py-3 text-lg leading-relaxed font-serif text-parchment/90 text-justify whitespace-pre-wrap overflow-y-auto"></p>
 
       <p id="editor-error" class="hidden text-rose text-sm px-6 pb-2"></p>
 
-      <!-- Mic control -->
-      <div class="flex flex-col items-center gap-2 pb-9 pt-2">
+      <!-- "Format & Punctuate" toolbar — only relevant while writing/editing -->
+      <div id="editor-toolbar" class="flex justify-center pb-1">
+        <button type="button" id="btn-punctuate"
+          class="flex items-center gap-1.5 text-xs text-dim hover:text-moss transition-colors px-3 py-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l1.6 3.9L18 8.4l-3.4 2.7L15.6 15 12 12.6 8.4 15l1-3.9L6 8.4l4.4-.5L12 3z"/><path d="M5 19l1-2 1 2-1 1z"/><path d="M18 19l.7-1.5.8 1.5-.8.8z"/>
+          </svg>
+          Format &amp; Punctuate
+        </button>
+      </div>
+
+      <!-- Mic control (write / new / edit modes only) -->
+      <div id="editor-mic-section" class="flex flex-col items-center gap-2 pb-9 pt-2">
         <div class="relative flex items-center justify-center">
           <span id="mic-ring-1" class="hidden absolute w-16 h-16 rounded-full bg-amber/40 animate-breathe"></span>
           <span id="mic-ring-2" class="hidden absolute w-16 h-16 rounded-full bg-amber/40 animate-breathe [animation-delay:0.6s]"></span>
