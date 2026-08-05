@@ -1,19 +1,21 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  where,
-  writeBatch,
+import { 
+  getFirestore, 
+  collection, 
+  deleteDoc, 
+  doc, 
+  getDoc, 
+  addDoc, 
+  onSnapshot, 
+  query, 
+  runTransaction, 
+  serverTimestamp, 
+  setDoc, 
+  updateDoc, 
+  where, 
+  writeBatch 
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
-
 import { firebaseConfig } from "./firebaseConfig.js";
 import {
   signUp,
