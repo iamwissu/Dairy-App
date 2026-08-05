@@ -1,27 +1,51 @@
-// ============================================================================
-// APP MODULE — the orchestrator.
-// Initializes Firebase, wires up the DOM, and switches between the three
-// view states: auth → dashboard → editor.
-// ============================================================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
+  runTransaction,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebaseConfig.js";
-import { signUp, logIn, logOut, resetPassword, watchAuthState, friendlyAuthError } from "./auth.js";
-import { saveEntry, updateEntry, deleteEntry, watchEntries } from "./firestore.js";
+import {
+  signUp,
+  logIn,
+  logOut,
+  resetPassword,
+  watchAuthState,
+  friendlyAuthError,
+} from "./auth.js";
+import {
+  saveEntry,
+  updateEntry,
+  deleteEntry,
+  watchEntries,
+} from "./firestore.js";
 import { createDictation } from "./speech.js";
 
-// ---------------------------------------------------------------------------
-// Firebase init
-// ---------------------------------------------------------------------------
+/*
+  Shared-entry security note:
+  This client only writes the current user's own `halves.<uid>` field.
+  Your Firestore rules must also enforce that restriction; client-side code
+  alone cannot secure Firestore data against a malicious direct request.
+*/
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ---------------------------------------------------------------------------
-// DOM references
-// ---------------------------------------------------------------------------
+const FRIEND_INVITES_COLLECTION = "friend_invites";
+const FRIENDSHIPS_COLLECTION = "friendships";
+const SHARED_ENTRIES_COLLECTION = "shared_entries";
+
 const views = {
   splash: document.getElementById("view-splash"),
   loading: document.getElementById("view-loading"),
@@ -30,12 +54,9 @@ const views = {
   editor: document.getElementById("view-editor"),
 };
 
-// Loading view's two sub-states: the normal spinner, and the "you forgot to
-// configure Firebase" message that replaces it if the keys are still placeholders.
 const loadingSpinner = document.getElementById("loading-spinner");
 const loadingConfigWarning = document.getElementById("loading-config-warning");
 
-// Auth view
 const tabLogin = document.getElementById("tab-login");
 const tabSignup = document.getElementById("tab-signup");
 const formAuth = document.getElementById("form-auth");
@@ -49,7 +70,6 @@ const btnAuthLabel = document.getElementById("btn-auth-label");
 const btnAuthSpinner = document.getElementById("btn-auth-spinner");
 const btnForgotPassword = document.getElementById("btn-forgot-password");
 
-// Password reset modal
 const modalResetOverlay = document.getElementById("modal-reset-overlay");
 const inputResetEmail = document.getElementById("input-reset-email");
 const resetError = document.getElementById("reset-error");
@@ -58,11 +78,9 @@ const btnResetSend = document.getElementById("btn-reset-send");
 const btnResetSendLabel = document.getElementById("btn-reset-send-label");
 const btnResetSendSpinner = document.getElementById("btn-reset-send-spinner");
 
-// Toast notification
 const toast = document.getElementById("toast");
 const toastMessage = document.getElementById("toast-message");
 
-// Dashboard view
 const dashboardGreeting = document.getElementById("dashboard-greeting");
 const entriesFeed = document.getElementById("entries-feed");
 const dashboardEmpty = document.getElementById("dashboard-empty");
@@ -72,7 +90,6 @@ const btnSignout = document.getElementById("btn-signout");
 const btnThemeToggle = document.getElementById("btn-theme-toggle");
 const themeMenu = document.getElementById("theme-menu");
 
-// Editor view
 const btnEditorBack = document.getElementById("btn-editor-back");
 const editorDate = document.getElementById("editor-date");
 const btnCancelEdit = document.getElementById("btn-cancel-edit");
@@ -89,58 +106,79 @@ const btnSaveEntry = document.getElementById("btn-save-entry");
 const btnSaveLabel = document.getElementById("btn-save-label");
 const btnSaveSpinner = document.getElementById("btn-save-spinner");
 const btnMic = document.getElementById("btn-mic");
-const micIcon = document.getElementById("mic-icon");
 const micStatus = document.getElementById("mic-status");
 const micRing1 = document.getElementById("mic-ring-1");
 const micRing2 = document.getElementById("mic-ring-2");
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-let authMode = "login"; // "login" | "signup"
+const formFriendInvite = document.getElementById("form-friend-invite");
+const inputFriendEmail = document.getElementById("input-friend-email");
+const btnSendFriendInvite = document.getElementById("btn-send-friend-invite");
+const friendInviteStatus = document.getElementById("friend-invite-status");
+const pendingInvitationsList = document.getElementById("pending-invitations-list");
+const pendingInvitationsEmpty = document.getElementById("pending-invitations-empty");
+const pendingInvitationsCount = document.getElementById("pending-invitations-count");
+const pendingInvitationTemplate = document.getElementById("pending-invitation-template");
+const friendsList = document.getElementById("friends-list");
+const friendsEmpty = document.getElementById("friends-empty");
+const friendsCount = document.getElementById("friends-count");
+const friendListItemTemplate = document.getElementById("friend-list-item-template");
+const btnOpenSharedEntry = document.getElementById("btn-open-shared-entry");
+
+const sharedEntryOverlay = document.getElementById("modal-shared-entry-overlay");
+const sharedEntryStatus = document.getElementById("shared-entry-status");
+const sharedUserAHeading = document.getElementById("shared-user-a-heading");
+const sharedUserBHeading = document.getElementById("shared-user-b-heading");
+const inputSharedEntryUserA = document.getElementById("input-shared-entry-user-a");
+const inputSharedEntryUserB = document.getElementById("input-shared-entry-user-b");
+const btnSaveSharedEntry = document.getElementById("btn-save-shared-entry");
+
+let authMode = "login";
 let currentUser = null;
-let unsubscribeEntries = null; // Firestore listener teardown
-let dictation = null; // active SpeechRecognition wrapper, if any
+let unsubscribeEntries = null;
+let unsubscribePendingInvites = null;
+let unsubscribeFriendships = null;
+let unsubscribeSharedEntry = null;
+let dictation = null;
 let isListening = false;
-let editingEntryId = null; // id of the entry currently open, or null while writing a new one
-let editorMode = "new"; // "new" | "read" | "edit" — see openEditor()/enterReadMode()/enterWriteMode()
-let readModeEntry = null; // the entry object currently shown in Reading Mode (used by Edit/Cancel)
+let editingEntryId = null;
+let editorMode = "new";
+let readModeEntry = null;
+let toastTimer = null;
+
+let activeFriends = [];
+let selectedSharedFriend = null;
+let activeSharedEntryId = null;
+let activeSharedEntry = null;
+
 const THEMES = ["spring", "summer", "fall", "winter"];
 const THEME_STORAGE_KEY = "kioku-theme";
-
-// ---------------------------------------------------------------------------
-// Seasonal themes
-// ---------------------------------------------------------------------------
-// Matches each theme's --c-ink value (see index.html) so the mobile browser/
-// PWA status bar tints along with the rest of the UI rather than staying
-// fixed on Spring's color.
 const THEME_STATUS_BAR_COLOR = {
   spring: "#141b17",
   summer: "#1c1410",
-  fall:   "#1a140d",
+  fall: "#1a140d",
   winter: "#101620",
 };
+
 const metaThemeColor = document.querySelector('meta[name="theme-color"]');
 
 function applyTheme(theme) {
   const safeTheme = THEMES.includes(theme) ? theme : "spring";
   document.documentElement.setAttribute("data-theme", safeTheme);
-  if (metaThemeColor) metaThemeColor.setAttribute("content", THEME_STATUS_BAR_COLOR[safeTheme]);
+  metaThemeColor?.setAttribute("content", THEME_STATUS_BAR_COLOR[safeTheme]);
+
   try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, safeTheme);
+    localStorage.setItem(THEME_STORAGE_KEY, safeTheme);
   } catch {
-    // Private browsing / storage disabled — the theme just won't persist across visits.
+    // Storage may be unavailable in private browsing.
   }
 }
 
 (function loadSavedTheme() {
-  let saved = null;
   try {
-    saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+    applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || "spring");
   } catch {
-    // ignore — falls back to the default below
+    applyTheme("spring");
   }
-  applyTheme(saved || "spring");
 })();
 
 function toggleThemeMenu(show) {
@@ -159,46 +197,29 @@ themeMenu.querySelectorAll(".theme-option").forEach((option) => {
   });
 });
 
-// Tapping anywhere outside the popover closes it.
 document.addEventListener("click", (event) => {
   if (!themeMenu.classList.contains("menu-visible")) return;
   if (btnThemeToggle.contains(event.target) || themeMenu.contains(event.target)) return;
   toggleThemeMenu(false);
 });
 
-// ---------------------------------------------------------------------------
-// View switching
-// ---------------------------------------------------------------------------
 function showView(name) {
-  Object.entries(views).forEach(([key, el]) => {
-    el.classList.toggle("hidden", key !== name);
+  Object.entries(views).forEach(([key, element]) => {
+    element.classList.toggle("hidden", key !== name);
   });
 }
 
-// ---------------------------------------------------------------------------
-// Splash / intro screen
-// ---------------------------------------------------------------------------
-// Shows the "Kioku" wordmark for a beat on open, then hands off to the normal
-// loading → auth-state flow. Dismissible early by tap, so it never feels
-// like something the person is stuck waiting on.
 let splashDismissed = false;
 
 function dismissSplash() {
   if (splashDismissed) return;
   splashDismissed = true;
-  views.splash.classList.add("animate-splash-out");
-  window.setTimeout(beginAppFlow, 300); // let the fade-out finish before swapping views
+  beginAppFlow();
 }
 
 views.splash.addEventListener("click", dismissSplash);
-window.setTimeout(dismissSplash, 2200); // auto-advance even if nobody taps
+window.setTimeout(dismissSplash, 2200);
 
-/**
- * True once real Firebase project keys have been pasted into firebaseConfig.js.
- * Placeholder values would otherwise make the app hang silently on the
- * loading spinner forever, since onAuthStateChanged never gets a chance to
- * fire against a project that doesn't exist.
- */
 function isFirebaseConfigured() {
   return (
     typeof firebaseConfig.apiKey === "string" &&
@@ -207,11 +228,6 @@ function isFirebaseConfigured() {
   );
 }
 
-/**
- * Prefers the account's nickname (Firebase Auth displayName) for the
- * dashboard greeting; falls back to the email's local part for older
- * accounts created before the nickname field existed.
- */
 function greetingName(user) {
   return user.displayName?.trim() || user.email?.split("@")[0] || "there";
 }
@@ -222,19 +238,27 @@ function beginAppFlow() {
   if (!isFirebaseConfigured()) {
     loadingSpinner.classList.add("hidden");
     loadingConfigWarning.classList.remove("hidden");
-    return; // don't attempt to talk to Firebase with placeholder keys
+    return;
   }
 
   watchAuthState(auth, (user) => {
     currentUser = user;
     stopDashboardListener();
+    stopSocialListeners();
+    stopSharedEntryListener();
     stopListeningIfActive();
 
     if (user) {
       dashboardGreeting.textContent = `Hi, ${greetingName(user)}`;
       showView("dashboard");
       startDashboardListener(user.uid);
+      startSocialListeners(user);
     } else {
+      activeFriends = [];
+      selectedSharedFriend = null;
+      activeSharedEntry = null;
+      activeSharedEntryId = null;
+      resetSharedEntryUI();
       setAuthMode("login");
       formAuth.reset();
       showView("auth");
@@ -242,12 +266,10 @@ function beginAppFlow() {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Auth view logic
-// ---------------------------------------------------------------------------
 function setAuthMode(mode) {
   authMode = mode;
   const isLogin = mode === "login";
+
   tabLogin.classList.toggle("border-moss", isLogin);
   tabLogin.classList.toggle("text-parchment", isLogin);
   tabLogin.classList.toggle("border-transparent", !isLogin);
@@ -260,13 +282,11 @@ function setAuthMode(mode) {
 
   btnAuthLabel.textContent = isLogin ? "Log in" : "Create account";
   inputPassword.autocomplete = isLogin ? "current-password" : "new-password";
-
   labelNickname.classList.toggle("hidden", isLogin);
   inputNickname.required = !isLogin;
+
   if (isLogin) inputNickname.value = "";
-
   btnForgotPassword.classList.toggle("hidden", !isLogin);
-
   hideAuthError();
 }
 
@@ -274,6 +294,7 @@ function showAuthError(message) {
   authError.textContent = message;
   authError.classList.remove("hidden");
 }
+
 function hideAuthError() {
   authError.classList.add("hidden");
 }
@@ -299,23 +320,21 @@ formAuth.addEventListener("submit", async (event) => {
     showAuthError("Please fill in both fields.");
     return;
   }
+
   if (authMode === "signup" && !nickname) {
     showAuthError("Let us know what to call you — add a nickname.");
     return;
   }
 
   setAuthSubmitting(true);
+
   try {
     if (authMode === "login") {
       await logIn(auth, email, password);
     } else {
       await signUp(auth, email, password, nickname);
-      // watchAuthState's listener can fire before updateProfile's displayName
-      // write finishes, so it may briefly show the email-based fallback —
-      // correct it explicitly now that we know signUp() has fully resolved.
       dashboardGreeting.textContent = `Hi, ${nickname}`;
     }
-    // onAuthStateChanged (below) takes it from here — no manual redirect needed.
   } catch (error) {
     showAuthError(friendlyAuthError(error));
   } finally {
@@ -327,27 +346,18 @@ btnSignout.addEventListener("click", () => {
   logOut(auth).catch((error) => console.error("Sign-out failed:", error));
 });
 
-// ---------------------------------------------------------------------------
-// Toast notifications
-// ---------------------------------------------------------------------------
-let toastTimer = null;
-
 function showToast(message, durationMs = 4000) {
   toastMessage.textContent = message;
   toast.classList.add("toast-visible");
-  window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => {
-    toast.classList.remove("toast-visible");
-  }, durationMs);
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => toast.classList.remove("toast-visible"), durationMs);
 }
 
-// ---------------------------------------------------------------------------
-// Forgot password / reset modal
-// ---------------------------------------------------------------------------
 function showResetError(message) {
   resetError.textContent = message;
   resetError.classList.remove("hidden");
 }
+
 function hideResetError() {
   resetError.classList.add("hidden");
 }
@@ -359,7 +369,6 @@ function setResetSubmitting(isSubmitting) {
 }
 
 function openResetModal() {
-  // Pre-fill with whatever's already in the login email field, if anything.
   inputResetEmail.value = inputEmail.value.trim();
   hideResetError();
   modalResetOverlay.classList.add("modal-visible");
@@ -373,12 +382,10 @@ function closeResetModal() {
 btnForgotPassword.addEventListener("click", openResetModal);
 btnResetCancel.addEventListener("click", closeResetModal);
 
-// Clicking the dimmed backdrop (not the card itself) also dismisses it.
 modalResetOverlay.addEventListener("click", (event) => {
   if (event.target === modalResetOverlay) closeResetModal();
 });
 
-// Escape key dismisses it too, for anyone on a physical keyboard.
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && modalResetOverlay.classList.contains("modal-visible")) {
     closeResetModal();
@@ -395,6 +402,7 @@ btnResetSend.addEventListener("click", async () => {
   }
 
   setResetSubmitting(true);
+
   try {
     await resetPassword(auth, email);
     closeResetModal();
@@ -406,82 +414,552 @@ btnResetSend.addEventListener("click", async () => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Dashboard view logic
-// ---------------------------------------------------------------------------
-function formatEntryDate(timestamp) {
-  // timestamp may briefly be null right after saveEntry(), before the
-  // server timestamp round-trips back — fall back to "just now" for that case.
-  if (!timestamp?.toDate) return { day: "•", month: "now", full: "Just now" };
-  const d = timestamp.toDate();
+function normalizeEmail(email) {
+  return email.trim().toLowerCase();
+}
+
+function profileForCurrentUser() {
   return {
-    day: d.getDate(),
-    month: d.toLocaleString(undefined, { month: "short" }).toLowerCase(),
-    full: d.toLocaleString(undefined, {
-      weekday: "long", month: "long", day: "numeric", year: "numeric",
-      hour: "numeric", minute: "2-digit",
+    userId: currentUser.uid,
+    email: normalizeEmail(currentUser.email || ""),
+    displayName: greetingName(currentUser),
+  };
+}
+
+function setFriendInviteStatus(message, type = "neutral") {
+  friendInviteStatus.textContent = message;
+  friendInviteStatus.classList.remove("hidden", "text-rose", "text-moss", "text-dim");
+  friendInviteStatus.classList.add(
+    type === "error" ? "text-rose" : type === "success" ? "text-moss" : "text-dim"
+  );
+}
+
+function friendInviteId(fromUserId, toEmail) {
+  return `${encodeURIComponent(fromUserId)}__${encodeURIComponent(toEmail)}`;
+}
+
+function friendshipId(firstUserId, secondUserId) {
+  return [firstUserId, secondUserId]
+    .sort()
+    .map((id) => encodeURIComponent(id).replaceAll("_", "%5F"))
+    .join("__");
+}
+
+function startSocialListeners(user) {
+  const userEmail = normalizeEmail(user.email || "");
+  if (!userEmail) return;
+
+  unsubscribePendingInvites = onSnapshot(
+    query(
+      collection(db, FRIEND_INVITES_COLLECTION),
+      where("toEmail", "==", userEmail)
+    ),
+    (snapshot) => {
+      const invitations = snapshot.docs
+        .map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }))
+        .filter((invite) => invite.status === "pending");
+
+      renderPendingInvitations(invitations);
+    },
+    (error) => {
+      console.error("Pending invitations listener failed:", error);
+    }
+  );
+
+  unsubscribeFriendships = onSnapshot(
+    query(
+      collection(db, FRIENDSHIPS_COLLECTION),
+      where("participantIds", "array-contains", user.uid)
+    ),
+    (snapshot) => {
+      activeFriends = snapshot.docs
+        .map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }))
+        .map((friendship) => {
+          const friendProfile = (friendship.memberProfiles || []).find(
+            (profile) => profile.userId !== user.uid
+          );
+
+          return {
+            friendshipId: friendship.id,
+            userId: friendProfile?.userId || "",
+            email: friendProfile?.email || "",
+            displayName: friendProfile?.displayName || friendProfile?.email || "Friend",
+          };
+        })
+        .filter((friend) => friend.userId);
+
+      renderFriends(activeFriends);
+
+      if (
+        selectedSharedFriend &&
+        !activeFriends.some((friend) => friend.userId === selectedSharedFriend.userId)
+      ) {
+        selectedSharedFriend = null;
+        stopSharedEntryListener();
+        resetSharedEntryUI();
+      }
+    },
+    (error) => {
+      console.error("Friends listener failed:", error);
+    }
+  );
+}
+
+function stopSocialListeners() {
+  if (unsubscribePendingInvites) {
+    unsubscribePendingInvites();
+    unsubscribePendingInvites = null;
+  }
+
+  if (unsubscribeFriendships) {
+    unsubscribeFriendships();
+    unsubscribeFriendships = null;
+  }
+}
+
+function renderPendingInvitations(invitations) {
+  pendingInvitationsList.innerHTML = "";
+  pendingInvitationsCount.textContent = invitations.length;
+
+  if (!invitations.length) {
+    pendingInvitationsList.appendChild(pendingInvitationsEmpty);
+    return;
+  }
+
+  invitations.forEach((invite) => {
+    const item = pendingInvitationTemplate.content.firstElementChild.cloneNode(true);
+    item.dataset.invitationId = invite.id;
+
+    const name = invite.fromDisplayName || invite.fromEmail || "Friend";
+    item.querySelector("[data-invitation-name]").textContent = name;
+    item.querySelector("[data-invitation-initial]").textContent = name.charAt(0).toUpperCase();
+
+    item.querySelector(".btn-accept-invitation").addEventListener("click", () => {
+      acceptFriendInvite(invite);
+    });
+
+    item.querySelector(".btn-decline-invitation").addEventListener("click", () => {
+      declineFriendInvite(invite.id);
+    });
+
+    pendingInvitationsList.appendChild(item);
+  });
+}
+
+function renderFriends(friends) {
+  friendsList.innerHTML = "";
+  friendsCount.textContent = friends.length;
+
+  if (!friends.length) {
+    friendsList.appendChild(friendsEmpty);
+    return;
+  }
+
+  friends.forEach((friend) => {
+    const item = friendListItemTemplate.content.firstElementChild.cloneNode(true);
+    item.dataset.friendId = friend.userId;
+    item.tabIndex = 0;
+    item.setAttribute("role", "button");
+    item.setAttribute("aria-label", `Open a shared entry with ${friend.displayName}`);
+
+    item.querySelector("[data-friend-name]").textContent = friend.displayName;
+    item.querySelector("[data-friend-email]").textContent = friend.email;
+    item.querySelector("[data-friend-initial]").textContent = friend.displayName.charAt(0).toUpperCase();
+
+    const openSharedEntry = () => {
+      selectedSharedFriend = friend;
+      window.location.hash = "modal-shared-entry-overlay";
+      ensureSharedEntry(friend).catch((error) => {
+        console.error("Could not prepare shared entry:", error);
+        setSharedEntryStatus("Couldn't open this shared entry.", "error");
+      });
+    };
+
+    item.addEventListener("click", openSharedEntry);
+    item.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openSharedEntry();
+      }
+    });
+
+    friendsList.appendChild(item);
+  });
+}
+
+async function sendFriendInvite() {
+  if (!currentUser) return;
+
+  const toEmail = normalizeEmail(inputFriendEmail.value);
+
+  if (!toEmail) {
+    setFriendInviteStatus("Enter your friend's email address.", "error");
+    return;
+  }
+
+  if (toEmail === normalizeEmail(currentUser.email || "")) {
+    setFriendInviteStatus("You can't invite yourself.", "error");
+    return;
+  }
+
+  if (activeFriends.some((friend) => friend.email === toEmail)) {
+    setFriendInviteStatus("This person is already your friend.", "error");
+    return;
+  }
+
+  btnSendFriendInvite.disabled = true;
+
+  try {
+    const inviteRef = doc(
+      db,
+      FRIEND_INVITES_COLLECTION,
+      friendInviteId(currentUser.uid, toEmail)
+    );
+
+    await setDoc(
+      inviteRef,
+      {
+        fromUserId: currentUser.uid,
+        fromEmail: normalizeEmail(currentUser.email || ""),
+        fromDisplayName: greetingName(currentUser),
+        toEmail,
+        status: "pending",
+        createdAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    inputFriendEmail.value = "";
+    setFriendInviteStatus("Invite sent.", "success");
+  } catch (error) {
+    console.error("Failed to send invitation:", error);
+    setFriendInviteStatus("Couldn't send the invite. Please try again.", "error");
+  } finally {
+    btnSendFriendInvite.disabled = false;
+  }
+}
+
+formFriendInvite.addEventListener("submit", (event) => {
+  event.preventDefault();
+  sendFriendInvite();
+});
+
+btnSendFriendInvite.addEventListener("click", sendFriendInvite);
+
+async function acceptFriendInvite(invite) {
+  if (!currentUser || !invite.fromUserId || invite.fromUserId === currentUser.uid) return;
+
+  try {
+    const currentProfile = profileForCurrentUser();
+    const senderProfile = {
+      userId: invite.fromUserId,
+      email: normalizeEmail(invite.fromEmail || ""),
+      displayName: invite.fromDisplayName || invite.fromEmail || "Friend",
+    };
+
+    const friendshipRef = doc(
+      db,
+      FRIENDSHIPS_COLLECTION,
+      friendshipId(currentUser.uid, invite.fromUserId)
+    );
+
+    const inviteRef = doc(db, FRIEND_INVITES_COLLECTION, invite.id);
+    const batch = writeBatch(db);
+
+    batch.set(
+      friendshipRef,
+      {
+        participantIds: [currentUser.uid, invite.fromUserId].sort(),
+        memberProfiles: [currentProfile, senderProfile],
+        createdAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    batch.delete(inviteRef);
+    await batch.commit();
+    showToast(`${senderProfile.displayName} is now your friend.`);
+  } catch (error) {
+    console.error("Failed to accept invitation:", error);
+    showToast("Couldn't accept that invitation.");
+  }
+}
+
+async function declineFriendInvite(inviteId) {
+  try {
+    await deleteDoc(doc(db, FRIEND_INVITES_COLLECTION, inviteId));
+    showToast("Invitation declined.");
+  } catch (error) {
+    console.error("Failed to decline invitation:", error);
+    showToast("Couldn't decline that invitation.");
+  }
+}
+
+function setSharedEntryStatus(message, type = "neutral") {
+  sharedEntryStatus.textContent = message;
+  sharedEntryStatus.classList.remove("text-rose", "text-moss", "text-dim", "text-dim/70");
+  sharedEntryStatus.classList.add(
+    type === "error" ? "text-rose" : type === "success" ? "text-moss" : "text-dim/70"
+  );
+}
+
+function resetSharedEntryUI() {
+  inputSharedEntryUserA.value = "";
+  inputSharedEntryUserB.value = "";
+  inputSharedEntryUserA.readOnly = true;
+  inputSharedEntryUserB.readOnly = true;
+  inputSharedEntryUserA.classList.add("opacity-60");
+  inputSharedEntryUserB.classList.add("opacity-60");
+  sharedUserAHeading.textContent = "User A";
+  sharedUserBHeading.textContent = "User B";
+  btnSaveSharedEntry.disabled = true;
+  setSharedEntryStatus("Select a friend to begin.");
+}
+
+function stopSharedEntryListener() {
+  if (unsubscribeSharedEntry) {
+    unsubscribeSharedEntry();
+    unsubscribeSharedEntry = null;
+  }
+}
+
+function sharedEntryDocumentId(friendUserId) {
+  return friendshipId(currentUser.uid, friendUserId);
+}
+
+async function ensureSharedEntry(friend) {
+  if (!currentUser || !friend?.userId) return;
+
+  const sharedId = sharedEntryDocumentId(friend.userId);
+  const sharedRef = doc(db, SHARED_ENTRIES_COLLECTION, sharedId);
+  const currentProfile = profileForCurrentUser();
+
+  await runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(sharedRef);
+
+    if (existing.exists()) return;
+
+    transaction.set(sharedRef, {
+      participantIds: [currentUser.uid, friend.userId].sort(),
+      userAId: currentUser.uid,
+      userBId: friend.userId,
+      memberProfiles: [
+        currentProfile,
+        {
+          userId: friend.userId,
+          email: friend.email,
+          displayName: friend.displayName,
+        },
+      ],
+      halves: {
+        [currentUser.uid]: {
+          text: "",
+          updatedAt: serverTimestamp(),
+        },
+        [friend.userId]: {
+          text: "",
+          updatedAt: serverTimestamp(),
+        },
+      },
+      createdAt: serverTimestamp(),
+    });
+  });
+
+  startSharedEntryListener(sharedId);
+}
+
+function startSharedEntryListener(sharedId) {
+  stopSharedEntryListener();
+  activeSharedEntryId = sharedId;
+
+  unsubscribeSharedEntry = onSnapshot(
+    doc(db, SHARED_ENTRIES_COLLECTION, sharedId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        activeSharedEntry = null;
+        resetSharedEntryUI();
+        setSharedEntryStatus("This shared entry is unavailable.", "error");
+        return;
+      }
+
+      activeSharedEntry = { id: snapshot.id, ...snapshot.data() };
+      renderSharedEntry(activeSharedEntry);
+    },
+    (error) => {
+      console.error("Shared entry listener failed:", error);
+      setSharedEntryStatus("Couldn't load this shared entry.", "error");
+    }
+  );
+}
+
+function memberName(sharedEntry, userId, fallback) {
+  const profile = (sharedEntry.memberProfiles || []).find(
+    (member) => member.userId === userId
+  );
+
+  return profile?.displayName || profile?.email || fallback;
+}
+
+function renderSharedEntry(sharedEntry) {
+  if (!currentUser) return;
+
+  const isUserA = sharedEntry.userAId === currentUser.uid;
+  const isUserB = sharedEntry.userBId === currentUser.uid;
+
+  if (!isUserA && !isUserB) {
+    resetSharedEntryUI();
+    setSharedEntryStatus("You don't have access to this shared entry.", "error");
+    return;
+  }
+
+  const userAName = memberName(sharedEntry, sharedEntry.userAId, "User A");
+  const userBName = memberName(sharedEntry, sharedEntry.userBId, "User B");
+
+  sharedUserAHeading.textContent = userAName;
+  sharedUserBHeading.textContent = userBName;
+
+  inputSharedEntryUserA.value = sharedEntry.halves?.[sharedEntry.userAId]?.text || "";
+  inputSharedEntryUserB.value = sharedEntry.halves?.[sharedEntry.userBId]?.text || "";
+
+  inputSharedEntryUserA.readOnly = !isUserA;
+  inputSharedEntryUserB.readOnly = !isUserB;
+
+  inputSharedEntryUserA.classList.toggle("opacity-60", !isUserA);
+  inputSharedEntryUserB.classList.toggle("opacity-60", !isUserB);
+
+  btnSaveSharedEntry.disabled = false;
+  setSharedEntryStatus(
+    isUserA
+      ? "You can edit only the left / top half."
+      : "You can edit only the right / bottom half.",
+    "success"
+  );
+}
+
+btnOpenSharedEntry.addEventListener("click", () => {
+  if (selectedSharedFriend) {
+    window.setTimeout(() => {
+      ensureSharedEntry(selectedSharedFriend).catch((error) => {
+        console.error("Could not open shared entry:", error);
+      });
+    }, 0);
+  } else {
+    resetSharedEntryUI();
+  }
+});
+
+btnSaveSharedEntry.addEventListener("click", async () => {
+  if (!currentUser || !activeSharedEntry || !activeSharedEntryId) {
+    setSharedEntryStatus("Select a friend before saving.", "error");
+    return;
+  }
+
+  const isUserA = activeSharedEntry.userAId === currentUser.uid;
+  const isUserB = activeSharedEntry.userBId === currentUser.uid;
+
+  if (!isUserA && !isUserB) {
+    setSharedEntryStatus("You don't have permission to save this entry.", "error");
+    return;
+  }
+
+  const ownTextarea = isUserA ? inputSharedEntryUserA : inputSharedEntryUserB;
+  const ownText = ownTextarea.value.trim();
+
+  btnSaveSharedEntry.disabled = true;
+
+  try {
+    /*
+      Only the currently authenticated participant's own nested half is sent
+      to Firestore. The opposite half is never included in this update.
+    */
+    await updateDoc(doc(db, SHARED_ENTRIES_COLLECTION, activeSharedEntryId), {
+      [`halves.${currentUser.uid}.text`]: ownText,
+      [`halves.${currentUser.uid}.updatedAt`]: serverTimestamp(),
+    });
+
+    setSharedEntryStatus("Your half was saved.", "success");
+    showToast("Your half of the shared entry was saved.");
+  } catch (error) {
+    console.error("Failed to save shared entry:", error);
+    setSharedEntryStatus("Couldn't save your half. Please try again.", "error");
+  } finally {
+    btnSaveSharedEntry.disabled = false;
+  }
+});
+
+function formatEntryDate(timestamp) {
+  if (!timestamp?.toDate) {
+    return { day: "•", month: "now", full: "Just now" };
+  }
+
+  const date = timestamp.toDate();
+
+  return {
+    day: date.getDate(),
+    month: date.toLocaleString(undefined, { month: "short" }).toLowerCase(),
+    full: date.toLocaleString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
     }),
   };
+}
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value;
+  return div.innerHTML;
 }
 
 function renderEntries(entries) {
   dashboardLoading.classList.add("hidden");
   entriesFeed.innerHTML = "";
 
-  if (entries.length === 0) {
+  if (!entries.length) {
     dashboardEmpty.classList.remove("hidden");
     return;
   }
+
   dashboardEmpty.classList.add("hidden");
 
-  for (const entry of entries) {
+  entries.forEach((entry) => {
     const { full } = formatEntryDate(entry.createdAt);
-    const displayTitle = entry.title?.trim() ? entry.title.trim() : "Untitled entry";
+    const displayTitle = entry.title?.trim() || "Untitled entry";
 
     const card = document.createElement("article");
-    card.className =
-      "torn-edge bg-ink2 rounded-b-2xl border border-hairline/70 border-t-0 overflow-hidden animate-fade-up hover:border-hairline transition-colors cursor-pointer";
+    card.className = "torn-edge bg-ink2 rounded-b-2xl border border-hairline/70 border-t-0 overflow-hidden animate-fade-up hover:border-hairline transition-colors cursor-pointer";
+
     card.innerHTML = `
       <div class="flex items-start gap-4 px-5 py-4">
         <div class="min-w-0 flex-1">
           <p class="text-[11px] uppercase tracking-wider text-dim mb-1.5 truncate">${full}</p>
           <h3 class="font-display text-lg text-parchment leading-snug truncate">${escapeHtml(displayTitle)}</h3>
         </div>
-        <button type="button" data-entry-id="${entry.id}"
-          class="btn-delete-entry shrink-0 mt-0.5 w-8 h-8 -mr-1.5 rounded-full flex items-center justify-center text-dim hover:text-rose hover:bg-ink3 transition-colors" title="Delete entry">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-          </svg>
-        </button>
+        <button type="button" data-entry-id="${entry.id}" class="btn-delete-entry shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center text-dim hover:text-rose hover:bg-ink3 transition-colors" title="Delete entry">×</button>
       </div>
     `;
-    // Opens the entry for viewing/editing — but not when the click landed on
-    // the delete button, which lives inside this same card.
+
     card.addEventListener("click", (event) => {
       if (event.target.closest(".btn-delete-entry")) return;
       openEditor(entry);
     });
-    entriesFeed.appendChild(card);
-  }
 
-  entriesFeed.querySelectorAll(".btn-delete-entry").forEach((btn) => {
-    btn.addEventListener("click", () => handleDeleteEntry(btn.dataset.entryId));
+    entriesFeed.appendChild(card);
+  });
+
+  entriesFeed.querySelectorAll(".btn-delete-entry").forEach((button) => {
+    button.addEventListener("click", () => handleDeleteEntry(button.dataset.entryId));
   });
 }
 
-// Basic HTML-escaping since entry text is user-generated and inserted via innerHTML.
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 async function handleDeleteEntry(entryId) {
-  const confirmed = window.confirm("Delete this page? This can't be undone.");
-  if (!confirmed) return;
+  if (!window.confirm("Delete this page? This can't be undone.")) return;
+
   try {
     await deleteEntry(db, entryId);
-    // The onSnapshot listener below re-renders the feed automatically.
   } catch (error) {
     console.error("Failed to delete entry:", error);
     window.alert("Couldn't delete that entry — please try again.");
@@ -496,15 +974,11 @@ function startDashboardListener(userId) {
   unsubscribeEntries = watchEntries(
     db,
     userId,
-    (entries) => renderEntries(entries),
+    renderEntries,
     (error) => {
       console.error("Entries listener error:", error);
       dashboardLoading.classList.add("hidden");
-      entriesFeed.innerHTML = `
-        <p class="text-rose text-sm text-center mt-8">
-          Couldn't load your entries. Check your connection, or your Firestore
-          security rules / index setup, and try refreshing.
-        </p>`;
+      entriesFeed.innerHTML = '<p class="text-rose text-sm text-center mt-8">Couldn’t load your entries. Please refresh and try again.</p>';
     }
   );
 }
@@ -517,17 +991,8 @@ function stopDashboardListener() {
 }
 
 btnNewEntry.addEventListener("click", () => openEditor(null));
-btnEditorBack.addEventListener("click", () => closeEditor());
+btnEditorBack.addEventListener("click", closeEditor);
 
-// ---------------------------------------------------------------------------
-// Editor view logic
-// ---------------------------------------------------------------------------
-/**
- * Opens the editor. Pass an existing entry object (as received from
- * Firestore, with .id/.title/.text/.createdAt) to view it in read-only
- * Reading Mode — or call with no argument (or null) to start a blank new
- * entry, which is always immediately editable.
- */
 function openEditor(entryToEdit = null) {
   hideEditorError();
   stopListeningIfActive();
@@ -541,21 +1006,24 @@ function openEditor(entryToEdit = null) {
     editingEntryId = null;
     readModeEntry = null;
     editorDate.textContent = new Date().toLocaleDateString(undefined, {
-      weekday: "long", month: "long", day: "numeric",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
     });
     enterWriteMode({ title: "", text: "" });
   }
 
   showView("editor");
-  if (editorMode !== "read") setTimeout(() => inputEntryTitle.focus(), 50);
+
+  if (editorMode !== "read") {
+    window.setTimeout(() => inputEntryTitle.focus(), 50);
+  }
 }
 
-/** Read-only view of an existing entry: static, justified text, nothing editable. */
 function enterReadMode() {
   editorMode = "read";
 
-  const title = readModeEntry.title?.trim() ? readModeEntry.title.trim() : "Untitled entry";
-  readerTitle.textContent = title;
+  readerTitle.textContent = readModeEntry.title?.trim() || "Untitled entry";
   readerText.textContent = readModeEntry.text || "";
 
   readerTitle.classList.remove("hidden");
@@ -570,11 +1038,6 @@ function enterReadMode() {
   btnSaveEntry.classList.add("hidden");
 }
 
-/**
- * Editable view — used both for a brand-new entry and for editing an
- * existing one. `{ title, text }` seeds the fields; whether Cancel appears
- * depends on editingEntryId (a new entry has nothing to "cancel" back to).
- */
 function enterWriteMode({ title, text }) {
   editorMode = editingEntryId ? "edit" : "new";
 
@@ -596,14 +1059,17 @@ function enterWriteMode({ title, text }) {
 
 btnEditEntry.addEventListener("click", () => {
   hideEditorError();
-  enterWriteMode({ title: readModeEntry.title || "", text: readModeEntry.text || "" });
-  setTimeout(() => inputEntryTitle.focus(), 50);
+  enterWriteMode({
+    title: readModeEntry.title || "",
+    text: readModeEntry.text || "",
+  });
+  window.setTimeout(() => inputEntryTitle.focus(), 50);
 });
 
 btnCancelEdit.addEventListener("click", () => {
   hideEditorError();
   stopListeningIfActive();
-  enterReadMode(); // readModeEntry was never touched, so this discards any unsaved changes
+  enterReadMode();
 });
 
 function closeEditor() {
@@ -618,6 +1084,7 @@ function showEditorError(message) {
   editorError.textContent = message;
   editorError.classList.remove("hidden");
 }
+
 function hideEditorError() {
   editorError.classList.add("hidden");
 }
@@ -631,23 +1098,24 @@ function setSaveSubmitting(isSubmitting) {
 btnSaveEntry.addEventListener("click", async () => {
   const title = inputEntryTitle.value.trim();
   const text = inputEntryText.value.trim();
+
   hideEditorError();
 
   if (!text) {
     showEditorError("Write something first — even a line counts.");
     return;
   }
+
   if (!currentUser) {
     showEditorError("You've been signed out — please log back in.");
     return;
   }
 
   setSaveSubmitting(true);
+
   try {
     if (editingEntryId) {
       await updateEntry(db, editingEntryId, title, text);
-      // Back to Reading Mode with the freshly-saved content, not the dashboard —
-      // matches "once saved, it returns to Reading Mode".
       readModeEntry = { ...readModeEntry, title, text };
       stopListeningIfActive();
       enterReadMode();
@@ -663,42 +1131,63 @@ btnSaveEntry.addEventListener("click", async () => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Smart Punctuation Helper ("Format & Punctuate")
-// ---------------------------------------------------------------------------
-/**
- * Light cleanup pass for dictated/typed text: collapses accidental double
- * spaces, capitalizes the start of each sentence (and line), straightens
- * stray spaces before punctuation, and makes sure the entry ends with a
- * proper closing mark. Deliberately conservative — it reformats spacing and
- * capitalization only, and never touches the words themselves.
- */
+function activeWritingTextarea() {
+  const focused = document.activeElement;
+
+  if (
+    focused instanceof HTMLTextAreaElement &&
+    !focused.readOnly &&
+    [inputEntryText, inputSharedEntryUserA, inputSharedEntryUserB].includes(focused)
+  ) {
+    return focused;
+  }
+
+  if (
+    sharedEntryOverlay.matches(":target") &&
+    activeSharedEntry &&
+    currentUser
+  ) {
+    if (activeSharedEntry.userAId === currentUser.uid) {
+      return inputSharedEntryUserA;
+    }
+
+    if (activeSharedEntry.userBId === currentUser.uid) {
+      return inputSharedEntryUserB;
+    }
+  }
+
+  return inputEntryText;
+}
+
 function formatAndPunctuate(rawText) {
   let text = rawText.trim();
-  if (!text) return text;
 
-  // Collapse runs of spaces/tabs into one (but leave intentional line breaks alone).
+  if (!text) return "";
+
   text = text.replace(/[ \t]{2,}/g, " ");
+  text = text.replace(/[ \t]+([,.;:!?])/g, "$1");
+  text = text.replace(/^([a-z])/, (_, letter) => letter.toUpperCase());
 
-  // Remove stray space(s) directly before punctuation — a common
-  // speech-to-text artifact ("well ,  that" → "well, that").
-  text = text.replace(/[ \t]+([.,!?;:])/g, "$1");
+  text = text.replace(
+    /([.!?]["'”)\]]*\s+)([a-z])/g,
+    (_, separator, letter) => separator + letter.toUpperCase()
+  );
 
-  // Capitalize the very first letter of the entry.
-  text = text.replace(/^([a-z])/, (m, ch) => ch.toUpperCase());
+  text = text.replace(
+    /(\n\s*)([a-z])/g,
+    (_, separator, letter) => separator + letter.toUpperCase()
+  );
 
-  // Capitalize the first letter after sentence-ending punctuation.
-  text = text.replace(/([.!?]\s+)([a-z])/g, (m, sep, ch) => sep + ch.toUpperCase());
-
-  // Capitalize the first letter of each new line/paragraph.
-  text = text.replace(/(\n\s*)([a-z])/g, (m, sep, ch) => sep + ch.toUpperCase());
-
-  // Capitalize a lone "i" used as a pronoun.
   text = text.replace(/\bi\b/g, "I");
 
-  // Make sure the entry ends with proper closing punctuation.
-  if (!/[.!?]["'’”)\]]?$/.test(text)) {
-    text += ".";
+  const closingMatch = text.match(/(["'”)\]]+)$/);
+  const closingCharacters = closingMatch ? closingMatch[0] : "";
+  const sentenceBody = closingCharacters
+    ? text.slice(0, -closingCharacters.length)
+    : text;
+
+  if (!/[.!?]$/.test(sentenceBody)) {
+    text = `${sentenceBody}.${closingCharacters}`;
   }
 
   return text;
@@ -706,24 +1195,23 @@ function formatAndPunctuate(rawText) {
 
 btnPunctuate.addEventListener("click", () => {
   hideEditorError();
-  const current = inputEntryText.value;
-  if (!current.trim()) {
+
+  const targetTextarea = activeWritingTextarea();
+
+  if (!targetTextarea.value.trim()) {
     showEditorError("Write something first — then format it.");
     return;
   }
-  inputEntryText.value = formatAndPunctuate(current);
+
+  targetTextarea.value = formatAndPunctuate(targetTextarea.value);
+  targetTextarea.dispatchEvent(new Event("input", { bubbles: true }));
   showToast("Formatted your text.");
 });
 
-// ---------------------------------------------------------------------------
-// Voice-to-text ("Talk to Write")
-// ---------------------------------------------------------------------------
 function setListeningUI(listening) {
   isListening = listening;
   micRing1.classList.toggle("hidden", !listening);
   micRing2.classList.toggle("hidden", !listening);
-  btnMic.classList.toggle("border-amber", listening);
-  btnMic.classList.toggle("text-amber", listening);
   micStatus.textContent = listening ? "listening… tap to stop" : "tap to talk to write";
 }
 
@@ -746,7 +1234,11 @@ btnMic.addEventListener("click", () => {
     onEnd: () => setListeningUI(false),
     onResult: (finalChunk) => {
       const current = inputEntryText.value;
-      const needsSpace = current.length > 0 && !current.endsWith(" ") && !current.endsWith("\n");
+      const needsSpace =
+        current.length > 0 &&
+        !current.endsWith(" ") &&
+        !current.endsWith("\n");
+
       inputEntryText.value = current + (needsSpace ? " " : "") + finalChunk;
     },
     onError: (message) => {
@@ -757,7 +1249,3 @@ btnMic.addEventListener("click", () => {
 
   dictation?.start();
 });
-
-// Note: the auth-state watcher itself lives in beginAppFlow() above, since it
-// must only start after the splash screen hands off (and only if Firebase is
-// actually configured) — see the "Splash / intro screen" section.

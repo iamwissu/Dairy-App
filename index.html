@@ -209,6 +209,23 @@
     pointer-events: auto;
   }
 
+  /* Phase 2 overlays use URL targets so their UI can be opened and closed
+     without changing the current app.js behavior. Phase 2 Firebase handlers
+     can replace this with state-driven modal controls later. */
+  #modal-friends-overlay,
+  #modal-shared-entry-overlay {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+  }
+  #modal-friends-overlay:target,
+  #modal-shared-entry-overlay:target {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
   /* Toast notification: starts invisible and translated down slightly;
      JS adds .toast-visible to fade + slide it in, then removes it to dismiss. */
   #toast {
@@ -410,6 +427,14 @@
           <h1 id="dashboard-greeting" class="font-display text-2xl">Your pages</h1>
         </div>
         <div class="flex items-center gap-2">
+          <a href="#modal-friends-overlay" id="btn-open-friends" title="Friends"
+            class="w-9 h-9 rounded-full bg-ink2 border border-hairline flex items-center justify-center text-dim hover:text-moss hover:border-moss/50 transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            <span class="sr-only">Open friends</span>
+          </a>
           <div class="relative">
             <button type="button" id="btn-theme-toggle" title="Change theme"
               class="w-9 h-9 rounded-full bg-ink2 border border-hairline flex items-center justify-center text-dim hover:text-moss hover:border-moss/50 transition-colors">
@@ -524,6 +549,14 @@
           </svg>
           Format &amp; Punctuate
         </button>
+        <a href="#modal-shared-entry-overlay" id="btn-open-shared-entry"
+          class="flex items-center gap-1.5 text-xs text-dim hover:text-moss transition-colors px-3 py-1.5" title="Open shared entry workspace">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M19 8v6M22 11h-6"/>
+          </svg>
+          Shared entry
+        </a>
       </div>
 
       <!-- Mic control (write / new / edit modes only) -->
@@ -574,6 +607,138 @@
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- ======================= FRIENDS MODAL (PHASE 2 UI) ======================= -->
+  <!-- The lists and template are intentionally presentational for now. Firebase
+       friend/invitation logic can populate these named containers in Phase 2. -->
+  <div id="modal-friends-overlay"
+    class="fixed inset-0 z-40 bg-ink/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-4 py-4 sm:px-6">
+    <section class="w-full max-w-md max-h-full overflow-y-auto bg-ink2 border border-hairline rounded-2xl p-6 shadow-2xl shadow-black/40"
+      style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));" role="dialog" aria-modal="true" aria-labelledby="friends-modal-title">
+      <header class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <p class="font-display italic text-dim text-sm">your circle</p>
+          <h2 id="friends-modal-title" class="font-display text-2xl">Friends</h2>
+        </div>
+        <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center text-dim hover:text-parchment hover:bg-ink3 transition-colors" aria-label="Close friends">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </a>
+      </header>
+
+      <form id="form-friend-invite" class="rounded-xl bg-ink3/60 border border-hairline p-4 mb-6" novalidate>
+        <label for="input-friend-email" class="block text-xs uppercase tracking-wide text-dim mb-2">Invite by email</label>
+        <div class="flex gap-2">
+          <input type="email" id="input-friend-email" autocomplete="email" placeholder="friend@example.com"
+            class="min-w-0 flex-1 bg-ink2 border border-hairline rounded-lg px-3 py-2.5 text-sm text-parchment placeholder-dim/60 focus:border-moss transition-colors" />
+          <button type="button" id="btn-send-friend-invite"
+            class="shrink-0 bg-moss hover:bg-moss-deep text-ink font-semibold text-sm rounded-lg px-3.5 py-2.5 transition-colors">Send</button>
+        </div>
+        <p id="friend-invite-status" class="hidden text-xs text-dim mt-2" aria-live="polite"></p>
+      </form>
+
+      <section aria-labelledby="pending-invitations-heading" class="mb-6">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h3 id="pending-invitations-heading" class="text-xs uppercase tracking-wide text-dim">Pending invitations</h3>
+          <span id="pending-invitations-count" class="text-xs text-dim/70">0</span>
+        </div>
+        <ul id="pending-invitations-list" class="flex flex-col gap-2" aria-live="polite">
+          <li id="pending-invitations-empty" class="rounded-xl border border-dashed border-hairline px-4 py-3 text-sm text-dim">No invitations waiting for you.</li>
+        </ul>
+        <template id="pending-invitation-template">
+          <li class="flex items-center gap-3 rounded-xl bg-ink3/60 border border-hairline p-3" data-invitation-id="">
+            <div class="w-9 h-9 rounded-full bg-moss/15 text-moss flex items-center justify-center font-display" data-invitation-initial aria-hidden="true">F</div>
+            <p class="min-w-0 flex-1 text-sm text-parchment truncate" data-invitation-name>Friend</p>
+            <div class="flex gap-1.5">
+              <button type="button" class="btn-accept-invitation rounded-lg bg-moss text-ink text-xs font-semibold px-2.5 py-2 hover:bg-moss-deep transition-colors">Accept</button>
+              <button type="button" class="btn-decline-invitation rounded-lg border border-hairline text-dim text-xs font-medium px-2.5 py-2 hover:text-rose hover:border-rose/50 transition-colors">Decline</button>
+            </div>
+          </li>
+        </template>
+      </section>
+
+      <section aria-labelledby="friends-list-heading">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h3 id="friends-list-heading" class="text-xs uppercase tracking-wide text-dim">Your friends</h3>
+          <span id="friends-count" class="text-xs text-dim/70">0</span>
+        </div>
+        <ul id="friends-list" class="flex flex-col gap-2" aria-live="polite">
+          <li id="friends-empty" class="rounded-xl border border-dashed border-hairline px-4 py-3 text-sm text-dim">Your accepted friends will appear here.</li>
+        </ul>
+        <template id="friend-list-item-template">
+          <li class="flex items-center gap-3 rounded-xl bg-ink3/60 border border-hairline p-3" data-friend-id="">
+            <div class="w-9 h-9 rounded-full bg-moss/15 text-moss flex items-center justify-center font-display" data-friend-initial aria-hidden="true">F</div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm text-parchment truncate" data-friend-name>Friend</p>
+              <p class="text-xs text-dim truncate" data-friend-email></p>
+            </div>
+          </li>
+        </template>
+      </section>
+    </section>
+  </div>
+
+  <!-- ======================= SHARED ENTRY MODAL (PHASE 2 UI) ======================= -->
+  <!-- Two equal writing panels sit beside one another on wider screens and
+       stack vertically on mobile. The current solo editor remains unchanged. -->
+  <div id="modal-shared-entry-overlay"
+    class="fixed inset-0 z-40 bg-ink/80 backdrop-blur-sm flex items-end sm:items-center justify-center px-3 py-3 sm:px-6 sm:py-6">
+    <section class="w-full max-w-5xl max-h-full overflow-y-auto bg-ink2 border border-hairline rounded-2xl p-5 sm:p-6 shadow-2xl shadow-black/40"
+      style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));" role="dialog" aria-modal="true" aria-labelledby="shared-entry-title">
+      <header class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <p class="font-display italic text-dim text-sm">writing together</p>
+          <h2 id="shared-entry-title" class="font-display text-2xl">Shared entry</h2>
+        </div>
+        <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center text-dim hover:text-parchment hover:bg-ink3 transition-colors" aria-label="Close shared entry">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </a>
+      </header>
+
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-dim mb-4">
+        <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-moss"></span>Both sides save independently</span>
+        <span id="shared-entry-status" class="text-dim/70" aria-live="polite">Ready to share</span>
+      </div>
+
+      <div id="shared-entry-panels" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <section class="rounded-2xl border border-moss/40 bg-ink3/45 overflow-hidden" aria-labelledby="shared-user-a-heading">
+          <header class="flex items-center justify-between gap-3 px-4 py-3 border-b border-hairline">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="w-8 h-8 rounded-full bg-moss/15 text-moss flex items-center justify-center font-display shrink-0" aria-hidden="true">A</span>
+              <div class="min-w-0">
+                <h3 id="shared-user-a-heading" class="text-sm font-semibold text-parchment truncate">User A</h3>
+                <p class="text-[11px] text-moss">Editing now</p>
+              </div>
+            </div>
+            <span class="text-[11px] text-dim">Your page</span>
+          </header>
+          <label class="sr-only" for="input-shared-entry-user-a">User A's writing area</label>
+          <textarea id="input-shared-entry-user-a" rows="11" placeholder="Write your side of the story…"
+            class="block w-full min-h-56 bg-transparent px-4 py-4 text-base leading-relaxed font-serif text-parchment placeholder-dim/50 resize-y focus:outline-none"></textarea>
+        </section>
+
+        <section class="rounded-2xl border border-hairline bg-ink3/45 overflow-hidden" aria-labelledby="shared-user-b-heading">
+          <header class="flex items-center justify-between gap-3 px-4 py-3 border-b border-hairline">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="w-8 h-8 rounded-full bg-amber/15 text-amber flex items-center justify-center font-display shrink-0" aria-hidden="true">B</span>
+              <div class="min-w-0">
+                <h3 id="shared-user-b-heading" class="text-sm font-semibold text-parchment truncate">User B</h3>
+                <p class="text-[11px] text-dim">Waiting for a collaborator</p>
+              </div>
+            </div>
+            <span class="text-[11px] text-dim">Their page</span>
+          </header>
+          <label class="sr-only" for="input-shared-entry-user-b">User B's writing area</label>
+          <textarea id="input-shared-entry-user-b" rows="11" placeholder="Your friend's writing appears here…"
+            class="block w-full min-h-56 bg-transparent px-4 py-4 text-base leading-relaxed font-serif text-parchment placeholder-dim/50 resize-y focus:outline-none"></textarea>
+        </section>
+      </div>
+
+      <footer class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-5 pt-4 border-t border-hairline">
+        <p class="text-xs text-dim">Invite a friend from the Friends menu to start a shared page.</p>
+        <button type="button" id="btn-save-shared-entry" class="bg-moss hover:bg-moss-deep text-ink font-semibold text-sm rounded-lg px-4 py-2.5 transition-colors">Save shared entry</button>
+      </footer>
+    </section>
   </div>
 
   <!-- ======================= TOAST NOTIFICATION ======================= -->
