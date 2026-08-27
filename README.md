@@ -16,14 +16,14 @@ follow step 1 below, then refresh.
 
 ```
 diary-app/
-├── index.html            ← the whole app shell (all 3 views live here)
+├── index.html            ← the whole app shell & seasonal background visuals
+├── sw.js                 ← service worker for full offline PWA caching
 ├── firestore.rules       ← paste into Firebase Console → Firestore → Rules
-├── js/
-│   ├── firebaseConfig.js  ← paste YOUR Firebase project keys here
-│   ├── auth.js              ← signup / login / signout
-│   ├── firestore.js         ← save / fetch / delete diary entries
-│   ├── speech.js             ← Web Speech API wrapper
-│   └── app.js                 ← wires everything together
+├── firebaseConfig.js     ← paste YOUR Firebase project keys here
+├── auth.js               ← signup / login / signout
+├── firestore.js          ← save / fetch / delete diary entries
+├── speech.js             ← Web Speech API wrapper
+├── app.js                ← wires everything together & offline persistence
 └── README.md
 ```
 

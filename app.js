@@ -2,6 +2,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/fireba
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 import { 
   getFirestore, 
+  enableMultiTabIndexedDbPersistence,
+  enableIndexedDbPersistence,
   collection, 
   deleteDoc, 
   doc, 
@@ -43,6 +45,34 @@ import { createDictation } from "./speech.js";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Enable Firestore offline persistence for instant local reads and background cloud sync
+enableMultiTabIndexedDbPersistence(db).catch((err) => {
+  if (err.code === "failed-precondition") {
+    // Multiple tabs open simultaneously; fallback to single-tab persistence
+    enableIndexedDbPersistence(db).catch((singleErr) => {
+      console.warn("Firestore single-tab persistence failed:", singleErr);
+    });
+  } else if (err.code === "unimplemented") {
+    console.warn("Firestore persistence is not supported in this browser:", err);
+  } else {
+    console.warn("Firestore persistence initialization failed:", err);
+  }
+});
+
+// Register Service Worker for offline caching
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("./sw.js")
+      .then((registration) => {
+        console.log("Service Worker registered with scope:", registration.scope);
+      })
+      .catch((error) => {
+        console.warn("Service Worker registration failed:", error);
+      });
+  });
+}
 
 const FRIEND_INVITES_COLLECTION = "friend_invites";
 const FRIENDSHIPS_COLLECTION = "friendships";

@@ -208,10 +208,68 @@
       background-repeat: repeat-x;
     }
 
+    /* Seasonal Background Decor Layer */
+    #theme-decor {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+      user-select: none;
+    }
+
+    .season-layer {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+
+    [data-theme="spring"] .season-spring,
+    [data-theme="summer"] .season-summer,
+    [data-theme="fall"] .season-fall,
+    [data-theme="winter"] .season-winter {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    @keyframes drift-slow {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-9px) rotate(4deg); }
+    }
+
+    @keyframes drift-gentle {
+      0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
+      50% { transform: translate(6px, -8px) rotate(-3deg); }
+    }
+
+    @keyframes rotate-sun {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse-warmth {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+
+    .anim-drift-1 { animation: drift-slow 8s ease-in-out infinite; }
+    .anim-drift-2 { animation: drift-gentle 10s ease-in-out infinite; }
+    .anim-drift-3 { animation: drift-slow 12s ease-in-out infinite reverse; }
+    .anim-sun-spin { animation: rotate-sun 120s linear infinite; transform-origin: 320px 80px; }
+    .anim-sun-pulse { animation: pulse-warmth 7s ease-in-out infinite; transform-origin: 320px 80px; }
+
     @media (prefers-reduced-motion: reduce) {
       .animate-breathe,
       .animate-fade-up,
-      .animate-write-in {
+      .animate-write-in,
+      .anim-drift-1,
+      .anim-drift-2,
+      .anim-drift-3,
+      .anim-sun-spin,
+      .anim-sun-pulse {
         animation: none !important;
       }
     }
@@ -219,7 +277,276 @@
 </head>
 
 <body class="bg-ink text-parchment font-sans min-h-screen antialiased transition-colors duration-500">
-  <div id="theme-decor" aria-hidden="true"></div>
+  <div id="theme-decor" aria-hidden="true">
+    <!-- SPRING DECOR -->
+    <div class="season-layer season-spring">
+      <!-- Top-right blooming cherry blossom branch -->
+      <svg class="absolute -top-6 -right-6 w-72 sm:w-96 h-72 sm:h-96 text-rose opacity-[0.14]" viewBox="0 0 300 300" fill="none" stroke="currentColor">
+        <!-- Main branch -->
+        <path d="M310 20 C 240 40, 190 90, 160 160 C 145 195, 120 220, 70 245" stroke-width="1.8" stroke-linecap="round" />
+        <path d="M210 75 C 185 55, 160 50, 130 55" stroke-width="1.2" stroke-linecap="round" />
+        <path d="M165 150 C 135 150, 110 135, 95 115" stroke-width="1.2" stroke-linecap="round" />
+        <!-- Spring blossoms (sakura petals) -->
+        <g transform="translate(130, 55)">
+          <path d="M0 0 C -7 -14, -3 -22, 0 -25 C 3 -22, 7 -14, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C 14 -7, 22 -3, 25 0 C 22 3, 14 7, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C 7 14, 3 22, 0 25 C -3 22, -7 14, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C -14 7, -22 3, -25 0 C -22 -3, -14 -7, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C -10 -10, -17 -17, -18 -20 C -20 -17, -10 -10, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <circle cx="0" cy="0" r="2.5" fill="currentColor" stroke="none" />
+        </g>
+        <g transform="translate(205, 80)">
+          <path d="M0 0 C -6 -12, -2 -18, 0 -20 C 2 -18, 6 -12, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C 12 -6, 18 -2, 20 0 C 18 2, 12 6, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C 6 12, 2 18, 0 20 C -2 18, -6 12, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C -12 6, -18 2, -20 0 C -18 -2, -12 -6, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <circle cx="0" cy="0" r="2" fill="currentColor" stroke="none" />
+        </g>
+        <g transform="translate(95, 115)">
+          <path d="M0 0 C -5 -10, -2 -15, 0 -18 C 2 -15, 5 -10, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C 10 -5, 15 -2, 18 0 C 15 2, 10 5, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C 5 10, 2 15, 0 18 C -2 15, -5 10, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <path d="M0 0 C -10 5, -15 2, -18 0 C -15 -2, -10 -5, 0 0" fill="currentColor" fill-opacity="0.25" stroke-width="1" />
+          <circle cx="0" cy="0" r="1.8" fill="currentColor" stroke="none" />
+        </g>
+      </svg>
+
+      <!-- Floating Sakura Petals -->
+      <svg class="anim-drift-1 absolute top-1/4 left-6 w-8 h-8 text-rose opacity-[0.15]" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3 C 8 7, 5 12, 7 17 C 9 20, 14 21, 17 18 C 20 14, 18 8, 12 3 Z M 12 6 C 14 10, 14 14, 12 17" stroke="currentColor" stroke-width="0.8" fill-opacity="0.4" />
+      </svg>
+      <svg class="anim-drift-2 absolute top-1/2 right-8 w-6 h-6 text-rose opacity-[0.12]" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3 C 8 7, 5 12, 7 17 C 9 20, 14 21, 17 18 C 20 14, 18 8, 12 3 Z" fill-opacity="0.4" />
+      </svg>
+      <svg class="anim-drift-3 absolute bottom-1/3 left-10 w-7 h-7 text-moss opacity-[0.14]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <!-- Young budding spring leaf -->
+        <path d="M4 20 C 4 14, 8 7, 20 4 C 18 12, 13 19, 4 20 Z" stroke-width="1.2" fill="currentColor" fill-opacity="0.2" />
+        <path d="M4 20 C 9 15, 14 10, 20 4" stroke-width="1" />
+      </svg>
+
+      <!-- Bottom-left gentle sprout & foliage -->
+      <svg class="absolute -bottom-6 -left-6 w-64 h-64 text-moss opacity-[0.13]" viewBox="0 0 240 240" fill="none" stroke="currentColor">
+        <path d="M20 240 C 30 180, 70 140, 130 110 C 170 90, 200 80, 230 75" stroke-width="1.5" stroke-linecap="round" />
+        <!-- Leaf 1 -->
+        <path d="M70 160 C 60 130, 80 110, 110 115 C 115 135, 95 155, 70 160 Z" fill="currentColor" fill-opacity="0.2" stroke-width="1.2" />
+        <path d="M70 160 C 85 145, 95 135, 110 115" stroke-width="0.8" />
+        <!-- Leaf 2 -->
+        <path d="M130 110 C 135 80, 160 70, 180 85 C 175 105, 155 115, 130 110 Z" fill="currentColor" fill-opacity="0.2" stroke-width="1.2" />
+        <path d="M130 110 C 145 100, 160 95, 180 85" stroke-width="0.8" />
+      </svg>
+    </div>
+
+    <!-- SUMMER DECOR -->
+    <div class="season-layer season-summer">
+      <!-- Top-right radiant solstice sunburst -->
+      <svg class="absolute -top-12 -right-12 w-80 sm:w-[28rem] h-80 sm:h-[28rem] text-amber opacity-[0.13]" viewBox="0 0 400 400" fill="none" stroke="currentColor">
+        <!-- Concentric celestial orbit rings -->
+        <circle cx="320" cy="80" r="140" stroke-width="1" stroke-dasharray="3 6" class="anim-sun-spin" />
+        <circle cx="320" cy="80" r="100" stroke-width="1" stroke-opacity="0.6" />
+        <circle cx="320" cy="80" r="65" stroke-width="1.2" fill="currentColor" fill-opacity="0.08" class="anim-sun-pulse" />
+        <!-- Sun rays radiating -->
+        <g stroke-width="1.3" stroke-linecap="round" stroke-opacity="0.8">
+          <line x1="320" y1="-10" x2="320" y2="25" />
+          <line x1="320" y1="135" x2="320" y2="170" />
+          <line x1="230" y1="80" x2="265" y2="80" />
+          <line x1="375" y1="80" x2="410" y2="80" />
+          <line x1="256" y1="16" x2="280" y2="40" />
+          <line x1="360" y1="120" x2="384" y2="144" />
+          <line x1="256" y1="144" x2="280" y2="120" />
+          <line x1="360" y1="40" x2="384" y2="16" />
+          <!-- Intermediate finer rays -->
+          <line x1="240" y1="50" x2="260" y2="60" stroke-width="0.8" />
+          <line x1="290" y1="0" x2="300" y2="20" stroke-width="0.8" />
+          <line x1="350" y1="0" x2="340" y2="20" stroke-width="0.8" />
+          <line x1="400" y1="50" x2="380" y2="60" stroke-width="0.8" />
+          <line x1="240" y1="110" x2="260" y2="100" stroke-width="0.8" />
+          <line x1="290" y1="160" x2="300" y2="140" stroke-width="0.8" />
+        </g>
+      </svg>
+
+      <!-- Bottom-left sliced citrus wheel vector -->
+      <svg class="absolute -bottom-10 -left-10 w-64 h-64 text-amber opacity-[0.14]" viewBox="0 0 240 240" fill="none" stroke="currentColor">
+        <!-- Outer rind and pith -->
+        <circle cx="100" cy="140" r="75" stroke-width="2" />
+        <circle cx="100" cy="140" r="68" stroke-width="1" stroke-dasharray="2 2" stroke-opacity="0.6" />
+        <circle cx="100" cy="140" r="63" stroke-width="1.2" />
+        <!-- Citrus Segments (pulp wedges) -->
+        <g fill="currentColor" fill-opacity="0.2" stroke-width="1">
+          <!-- Segment 1 (Top) -->
+          <path d="M100 133 L93 85 A56 56 0 0 1 107 85 Z" />
+          <!-- Segment 2 (Top Right) -->
+          <path d="M105 135 L138 98 A56 56 0 0 1 148 110 Z" />
+          <!-- Segment 3 (Right) -->
+          <path d="M107 140 L155 133 A56 56 0 0 1 155 147 Z" />
+          <!-- Segment 4 (Bottom Right) -->
+          <path d="M105 145 L138 182 A56 56 0 0 1 126 191 Z" />
+          <!-- Segment 5 (Bottom) -->
+          <path d="M100 147 L107 195 A56 56 0 0 1 93 195 Z" />
+          <!-- Segment 6 (Bottom Left) -->
+          <path d="M95 145 L62 182 A56 56 0 0 1 52 170 Z" />
+          <!-- Segment 7 (Left) -->
+          <path d="M93 140 L45 147 A56 56 0 0 1 45 133 Z" />
+          <!-- Segment 8 (Top Left) -->
+          <path d="M95 135 L62 98 A56 56 0 0 1 74 89 Z" />
+        </g>
+        <!-- Center core -->
+        <circle cx="100" cy="140" r="6" fill="currentColor" stroke="none" fill-opacity="0.4" />
+      </svg>
+
+      <!-- Warm floating solar sparkles & summer accents -->
+      <svg class="anim-drift-1 absolute top-1/3 left-8 w-6 h-6 text-amber opacity-[0.14]" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 0 C 12 7, 17 12, 24 12 C 17 12, 12 17, 12 24 C 12 17, 7 12, 0 12 C 7 12, 12 7, 12 0 Z" />
+      </svg>
+      <svg class="anim-drift-2 absolute top-2/3 right-8 w-7 h-7 text-moss opacity-[0.12]" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2 C 12 7, 17 12, 22 12 C 17 12, 12 17, 12 22 C 12 17, 7 12, 2 12 C 7 12, 12 7, 12 2 Z" />
+      </svg>
+    </div>
+
+    <!-- FALL DECOR -->
+    <div class="season-layer season-fall">
+      <!-- Top-right Momiji (Japanese Maple) branch -->
+      <svg class="absolute -top-6 -right-6 w-72 sm:w-96 h-72 sm:h-96 text-moss opacity-[0.15]" viewBox="0 0 300 300" fill="none" stroke="currentColor">
+        <path d="M310 10 C 260 40, 200 90, 160 160 C 130 210, 90 250, 20 280" stroke-width="1.8" stroke-linecap="round" />
+        <path d="M220 70 C 190 60, 160 65, 130 80" stroke-width="1.2" stroke-linecap="round" />
+        <path d="M160 160 C 130 150, 100 160, 80 180" stroke-width="1.2" stroke-linecap="round" />
+        
+        <!-- Momiji leaf at node 1 -->
+        <g transform="translate(130, 80) scale(0.9)">
+          <path d="M0 0 L-2 -30 L-10 -22 L-24 -24 L-18 -12 L-28 0 L-16 6 L-18 20 L-6 12 L0 26 L6 12 L18 20 L16 6 L28 0 L18 -12 L24 -24 L10 -22 Z" fill="currentColor" fill-opacity="0.22" stroke-width="1" />
+          <line x1="0" y1="26" x2="0" y2="-30" stroke-width="0.8" />
+        </g>
+        <!-- Momiji leaf at node 2 -->
+        <g transform="translate(80, 180) rotate(-20) scale(0.8)">
+          <path d="M0 0 L-2 -30 L-10 -22 L-24 -24 L-18 -12 L-28 0 L-16 6 L-18 20 L-6 12 L0 26 L6 12 L18 20 L16 6 L28 0 L18 -12 L24 -24 L10 -22 Z" fill="currentColor" fill-opacity="0.22" stroke-width="1" />
+          <line x1="0" y1="26" x2="0" y2="-30" stroke-width="0.8" />
+        </g>
+      </svg>
+
+      <!-- Drifting Ginkgo Fan Leaf -->
+      <svg class="anim-drift-1 absolute top-1/4 left-8 w-9 h-9 text-amber opacity-[0.16]" viewBox="0 0 100 100" fill="none" stroke="currentColor">
+        <path d="M50 95 C 48 70, 48 55, 50 45 C 20 40, 5 25, 10 10 C 25 -2, 45 15, 48 25 C 50 20, 52 20, 54 25 C 57 15, 77 -2, 92 10 C 97 25, 82 40, 52 45 C 54 55, 54 70, 50 95 Z" fill="currentColor" fill-opacity="0.25" stroke-width="1.5" />
+        <!-- Radiating Ginkgo Veins -->
+        <path d="M50 45 C 35 30, 20 20, 15 15" stroke-width="0.8" stroke-opacity="0.6" />
+        <path d="M50 45 C 42 28, 35 15, 30 10" stroke-width="0.8" stroke-opacity="0.6" />
+        <path d="M50 45 C 58 28, 65 15, 70 10" stroke-width="0.8" stroke-opacity="0.6" />
+        <path d="M50 45 C 65 30, 80 20, 85 15" stroke-width="0.8" stroke-opacity="0.6" />
+      </svg>
+
+      <!-- Drifting Autumn Oak Leaf & Acorn -->
+      <svg class="anim-drift-2 absolute top-1/2 right-6 w-8 h-8 text-rose opacity-[0.14]" viewBox="0 0 100 100" fill="none" stroke="currentColor">
+        <path d="M50 95 L50 85 C 38 85, 30 75, 40 65 C 28 62, 25 48, 38 40 C 25 35, 28 20, 42 18 C 45 10, 55 10, 58 18 C 72 20, 75 35, 62 40 C 75 48, 72 62, 60 65 C 70 75, 62 85, 50 85 Z" fill="currentColor" fill-opacity="0.25" stroke-width="1.5" />
+        <line x1="50" y1="85" x2="50" y2="15" stroke-width="1" />
+      </svg>
+
+      <svg class="anim-drift-3 absolute bottom-1/4 left-10 w-6 h-6 text-amber opacity-[0.15]" viewBox="0 0 40 40" fill="none" stroke="currentColor">
+        <!-- Acorn -->
+        <path d="M12 16 C 12 8, 28 8, 28 16 Z" fill="currentColor" fill-opacity="0.35" stroke-width="1.2" />
+        <path d="M12 16 C 12 28, 20 32, 20 32 C 20 32, 28 28, 28 16 Z" fill="currentColor" fill-opacity="0.2" stroke-width="1.2" />
+        <line x1="20" y1="10" x2="20" y2="5" stroke-width="1.5" stroke-linecap="round" />
+      </svg>
+
+      <!-- Bottom-left foliage cluster -->
+      <svg class="absolute -bottom-8 -left-8 w-64 h-64 text-amber opacity-[0.13]" viewBox="0 0 240 240" fill="none" stroke="currentColor">
+        <g transform="translate(60, 160) rotate(45)">
+          <path d="M0 0 L-2 -30 L-10 -22 L-24 -24 L-18 -12 L-28 0 L-16 6 L-18 20 L-6 12 L0 26 L6 12 L18 20 L16 6 L28 0 L18 -12 L24 -24 L10 -22 Z" fill="currentColor" fill-opacity="0.22" stroke-width="1.2" />
+        </g>
+        <g transform="translate(130, 190) rotate(15) scale(0.8)">
+          <path d="M50 95 C 48 70, 48 55, 50 45 C 20 40, 5 25, 10 10 C 25 -2, 45 15, 48 25 C 50 20, 52 20, 54 25 C 57 15, 77 -2, 92 10 C 97 25, 82 40, 52 45 C 54 55, 54 70, 50 95 Z" fill="currentColor" fill-opacity="0.25" stroke-width="1.2" />
+        </g>
+      </svg>
+    </div>
+
+    <!-- WINTER DECOR -->
+    <div class="season-layer season-winter">
+      <!-- Top-right intricate 6-fold geometric snowflake -->
+      <svg class="absolute -top-8 -right-8 w-72 sm:w-96 h-72 sm:h-96 text-moss opacity-[0.16]" viewBox="0 0 300 300" fill="none" stroke="currentColor">
+        <g transform="translate(220, 80)">
+          <!-- Hexagonal center ring -->
+          <polygon points="0,-12 10.4,-6 10.4,6 0,12 -10.4,6 -10.4,-6" stroke-width="1.2" fill="currentColor" fill-opacity="0.15" />
+          <polygon points="0,-24 20.8,-12 20.8,12 0,24 -20.8,12 -20.8,-12" stroke-width="0.8" stroke-dasharray="2 2" />
+          <!-- 6 Primary snowflake axes with dendrite branching -->
+          <!-- Axis 0° (Up) -->
+          <g>
+            <line x1="0" y1="-12" x2="0" y2="-75" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M0 -30 L-10 -40 M0 -30 L10 -40" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M0 -50 L-12 -62 M0 -50 L12 -62" stroke-width="1.2" stroke-linecap="round" />
+            <polygon points="0,-75 -4,-69 0,-63 4,-69" fill="currentColor" />
+          </g>
+          <!-- Axis 60° -->
+          <g transform="rotate(60)">
+            <line x1="0" y1="-12" x2="0" y2="-75" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M0 -30 L-10 -40 M0 -30 L10 -40" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M0 -50 L-12 -62 M0 -50 L12 -62" stroke-width="1.2" stroke-linecap="round" />
+            <polygon points="0,-75 -4,-69 0,-63 4,-69" fill="currentColor" />
+          </g>
+          <!-- Axis 120° -->
+          <g transform="rotate(120)">
+            <line x1="0" y1="-12" x2="0" y2="-75" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M0 -30 L-10 -40 M0 -30 L10 -40" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M0 -50 L-12 -62 M0 -50 L12 -62" stroke-width="1.2" stroke-linecap="round" />
+            <polygon points="0,-75 -4,-69 0,-63 4,-69" fill="currentColor" />
+          </g>
+          <!-- Axis 180° -->
+          <g transform="rotate(180)">
+            <line x1="0" y1="-12" x2="0" y2="-75" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M0 -30 L-10 -40 M0 -30 L10 -40" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M0 -50 L-12 -62 M0 -50 L12 -62" stroke-width="1.2" stroke-linecap="round" />
+            <polygon points="0,-75 -4,-69 0,-63 4,-69" fill="currentColor" />
+          </g>
+          <!-- Axis 240° -->
+          <g transform="rotate(240)">
+            <line x1="0" y1="-12" x2="0" y2="-75" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M0 -30 L-10 -40 M0 -30 L10 -40" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M0 -50 L-12 -62 M0 -50 L12 -62" stroke-width="1.2" stroke-linecap="round" />
+            <polygon points="0,-75 -4,-69 0,-63 4,-69" fill="currentColor" />
+          </g>
+          <!-- Axis 300° -->
+          <g transform="rotate(300)">
+            <line x1="0" y1="-12" x2="0" y2="-75" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M0 -30 L-10 -40 M0 -30 L10 -40" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M0 -50 L-12 -62 M0 -50 L12 -62" stroke-width="1.2" stroke-linecap="round" />
+            <polygon points="0,-75 -4,-69 0,-63 4,-69" fill="currentColor" />
+          </g>
+        </g>
+      </svg>
+
+      <!-- Drifting Snowflakes & Ice Crystals -->
+      <svg class="anim-drift-1 absolute top-1/3 left-7 w-8 h-8 text-dim opacity-[0.16]" viewBox="0 0 60 60" fill="none" stroke="currentColor">
+        <g transform="translate(30, 30)">
+          <line x1="0" y1="-26" x2="0" y2="26" stroke-width="1.2" stroke-linecap="round" />
+          <line x1="-22.5" y1="-13" x2="22.5" y2="13" stroke-width="1.2" stroke-linecap="round" />
+          <line x1="-22.5" y1="13" x2="22.5" y2="-13" stroke-width="1.2" stroke-linecap="round" />
+          <!-- Chevron tips -->
+          <path d="M-5 -18 L0 -23 L5 -18" stroke-width="1" stroke-linecap="round" />
+          <path d="M-5 18 L0 23 L5 18" stroke-width="1" stroke-linecap="round" />
+          <circle cx="0" cy="0" r="3" fill="currentColor" fill-opacity="0.3" stroke="none" />
+        </g>
+      </svg>
+
+      <svg class="anim-drift-2 absolute top-2/3 right-8 w-6 h-6 text-parchment opacity-[0.14]" viewBox="0 0 24 24" fill="currentColor">
+        <!-- 8-point ice crystal star -->
+        <path d="M12 0 L14 8 L22 6 L16 12 L22 18 L14 16 L12 24 L10 16 L2 18 L8 12 L2 6 L10 8 Z" fill-opacity="0.4" />
+      </svg>
+
+      <svg class="anim-drift-3 absolute bottom-1/4 left-10 w-5 h-5 text-moss opacity-[0.15]" viewBox="0 0 24 24" fill="currentColor">
+        <!-- 4-point diamond sparkle -->
+        <path d="M12 0 C 12 6, 18 12, 24 12 C 18 12, 12 18, 12 24 C 12 18, 6 12, 0 12 C 6 12, 12 6, 12 0 Z" fill-opacity="0.5" />
+      </svg>
+
+      <!-- Bottom-left frosted pine sprig & frost crystals -->
+      <svg class="absolute -bottom-8 -left-8 w-64 h-64 text-moss opacity-[0.14]" viewBox="0 0 240 240" fill="none" stroke="currentColor">
+        <path d="M10 230 C 50 190, 100 150, 170 120" stroke-width="1.5" stroke-linecap="round" />
+        <!-- Pine needle pairs -->
+        <path d="M60 185 L40 165 M60 185 L50 155 M60 185 L75 160" stroke-width="1.2" stroke-linecap="round" />
+        <path d="M95 160 L75 140 M95 160 L85 130 M95 160 L110 135" stroke-width="1.2" stroke-linecap="round" />
+        <path d="M130 138 L110 118 M130 138 L120 108 M130 138 L145 113" stroke-width="1.2" stroke-linecap="round" />
+        <!-- Little frost stars -->
+        <g transform="translate(170, 120)">
+          <path d="M0 -8 L0 8 M-8 0 L8 0 M-5 -5 L5 5 M-5 5 L5 -5" stroke-width="1" stroke-linecap="round" />
+        </g>
+      </svg>
+    </div>
+  </div>
 
   <div id="app" class="mx-auto max-w-md min-h-screen relative z-10 flex flex-col">
     <section id="view-splash" class="flex-1 flex flex-col items-center justify-center gap-3 px-8 cursor-pointer select-none">
