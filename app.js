@@ -1191,53 +1191,184 @@ function activeWritingTextarea() {
   return inputEntryText;
 }
 
-function formatAndPunctuate(rawText) {
-  let text = rawText.trim();
-
+/**
+ * Enhanced local punctuation, spacing, and capitalization rules.
+ * Runs instantly without network dependencies.
+ */
+function cleanAndPunctuateLocal(rawText) {
+  let text = (rawText || "").trim();
   if (!text) return "";
 
-  text = text.replace(/[ \t]{2,}/g, " ");
+  // 1. Collapse consecutive tabs and multiple spaces into a single space
+  text = text.replace(/[ \t]+/g, " ");
+  // Clean up spaces before newlines and collapse excess blank lines
+  text = text.replace(/ \n/g, "\n").replace(/\n{3,}/g, "\n\n");
+
+  // 2. Fix punctuation spacing:
+  // Remove accidental spaces immediately before punctuation marks (, . ! ? : ;)
   text = text.replace(/[ \t]+([,.;:!?])/g, "$1");
-  text = text.replace(/^([a-z])/, (_, letter) => letter.toUpperCase());
 
-  text = text.replace(
-    /([.!?]["'”)\]]*\s+)([a-z])/g,
-    (_, separator, letter) => separator + letter.toUpperCase()
-  );
+  // Ensure exactly 1 space after commas, colons, and semicolons when followed by a non-space character (excluding numbers like 3,000 or 12:30 or closing quotes)
+  text = text.replace(/([,;:])(?=[^\s0-9"'”’\]\)])/g, "$1 ");
 
-  text = text.replace(
-    /(\n\s*)([a-z])/g,
-    (_, separator, letter) => separator + letter.toUpperCase()
-  );
+  // Ensure 1 space after periods, question marks, and exclamation marks if followed by a letter
+  text = text.replace(/([.!?]+)(?=[a-zA-Z])/g, "$1 ");
 
+  // Deduplicate accidental repeated commas, semicolons, colons
+  text = text.replace(/,{2,}/g, ",");
+  text = text.replace(/;{2,}/g, ";");
+  text = text.replace(/:{2,}/g, ":");
+
+  // 3. Smart introductory clause comma heuristics (e.g., "However today", "Suddenly everything")
+  const introWords = [
+    "however", "therefore", "furthermore", "moreover", "meanwhile",
+    "fortunately", "unfortunately", "surprisingly", "naturally",
+    "eventually", "consequently", "nonetheless", "in addition",
+    "for example", "for instance", "after all", "first of all",
+    "to begin with", "in the end", "as a result"
+  ];
+  const introPattern = new RegExp(`(^|[.!?\\n]\\s*(?:["'“‘(\\[{]\\s*)*)(${introWords.join("|")})\\s+([a-zA-Z])`, "gi");
+  text = text.replace(introPattern, (match, prefix, intro, nextChar) => {
+    return `${prefix}${intro}, ${nextChar}`;
+  });
+
+  // 4. Standalone lowercase "i" and common "i" contractions (i'm, i've, i'll, i'd, etc.)
   text = text.replace(/\bi\b/g, "I");
+  text = text.replace(/\bi(?=['’][a-zA-Z])/g, "I");
 
-  const closingMatch = text.match(/(["'”)\]]+)$/);
+  // 5. Capitalize first character of the entry or newlines (including past leading quotes/parens)
+  text = text.replace(/(^[\s"'“‘(\[{]*|\n[\s"'“‘(\[{]*)([a-z])/gu, (_, prefix, letter) => prefix + letter.toUpperCase());
+
+  // 6. Capitalize the first letter after any sentence-ending punctuation (. ! ? …)
+  text = text.replace(
+    /([.!?…]+[\s"'”’\)\]\}]*\s+)([a-z])/g,
+    (_, separator, letter) => separator + letter.toUpperCase()
+  );
+
+  // 7. Ensure the entry finishes with a proper ending period if missing
+  const closingMatch = text.match(/(["'”’\)\]\}]+)$/);
   const closingCharacters = closingMatch ? closingMatch[0] : "";
   const sentenceBody = closingCharacters
-    ? text.slice(0, -closingCharacters.length)
-    : text;
+    ? text.slice(0, -closingCharacters.length).trimEnd()
+    : text.trimEnd();
 
-  if (!/[.!?]$/.test(sentenceBody)) {
+  if (sentenceBody && !/[.!?…]$/.test(sentenceBody)) {
     text = `${sentenceBody}.${closingCharacters}`;
   }
 
   return text;
 }
 
-btnPunctuate.addEventListener("click", () => {
+/**
+ * Smart formatting engine:
+ * If online, leverages the free LanguageTool grammar API for clause/comma/grammar enhancement.
+ * If offline or upon network error/timeout, seamlessly falls back to enhanced local rules.
+ */
+async function formatAndPunctuateSmart(rawText) {
+  const trimmed = (rawText || "").trim();
+  if (!trimmed) return { text: "", mode: "offline" };
+
+  if (!navigator.onLine) {
+    return { text: cleanAndPunctuateLocal(trimmed), mode: "offline" };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+    const params = new URLSearchParams();
+    params.append("text", trimmed);
+    params.append("language", "en-US");
+    params.append("enabledOnly", "false");
+
+    const response = await fetch("https://api.languagetool.org/v2/check", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json",
+      },
+      body: params.toString(),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`LanguageTool API responded with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    let text = trimmed;
+
+    if (Array.isArray(data.matches) && data.matches.length > 0) {
+      // Sort matches descending by offset so replacements don't invalidate subsequent offsets
+      const sortedMatches = [...data.matches].sort((a, b) => b.offset - a.offset);
+
+      for (const match of sortedMatches) {
+        if (
+          match.replacements &&
+          match.replacements.length > 0 &&
+          typeof match.offset === "number" &&
+          typeof match.length === "number"
+        ) {
+          const replacement = match.replacements[0].value;
+          const issueType = match.rule?.issueType || "";
+          const ruleCategory = match.rule?.category?.id || "";
+
+          // Prioritize punctuation, typographical, grammar, and style suggestions
+          if (
+            ["punctuation", "typographical", "grammar", "misspelling", "style"].includes(issueType) ||
+            ["PUNCTUATION", "TYPOGRAPHY", "GRAMMAR", "CASING"].includes(ruleCategory)
+          ) {
+            text = text.slice(0, match.offset) + replacement + text.slice(match.offset + match.length);
+          }
+        }
+      }
+    }
+
+    // Apply the local formatting pass on top to guarantee consistent spacing and sentence endings
+    return { text: cleanAndPunctuateLocal(text), mode: "online" };
+  } catch (error) {
+    console.warn("LanguageTool API unavailable or timed out; using local formatting rules:", error);
+    return { text: cleanAndPunctuateLocal(trimmed), mode: "offline" };
+  }
+}
+
+btnPunctuate.addEventListener("click", async () => {
   hideEditorError();
 
   const targetTextarea = activeWritingTextarea();
+  const original = targetTextarea.value;
 
-  if (!targetTextarea.value.trim()) {
+  if (!original.trim()) {
     showEditorError("Write something first — then format it.");
     return;
   }
 
-  targetTextarea.value = formatAndPunctuate(targetTextarea.value);
-  targetTextarea.dispatchEvent(new Event("input", { bubbles: true }));
-  showToast("Formatted your text.");
+  const originalText = btnPunctuate.textContent;
+  btnPunctuate.disabled = true;
+  btnPunctuate.classList.add("opacity-60", "pointer-events-none");
+  btnPunctuate.textContent = "Formatting…";
+
+  try {
+    const result = await formatAndPunctuateSmart(original);
+    targetTextarea.value = result.text;
+    targetTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+
+    if (result.mode === "online") {
+      showToast("Formatted & punctuated your text.");
+    } else {
+      showToast("Formatted text (offline mode).");
+    }
+  } catch (err) {
+    targetTextarea.value = cleanAndPunctuateLocal(original);
+    targetTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+    showToast("Formatted your text.");
+  } finally {
+    btnPunctuate.textContent = originalText;
+    btnPunctuate.disabled = false;
+    btnPunctuate.classList.remove("opacity-60", "pointer-events-none");
+  }
 });
 
 function setListeningUI(listening) {
